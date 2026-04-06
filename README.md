@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="islands.webp" alt="Islands logo" width="600" />
+  <img src="islands.webp" alt="Islands logo" width="100%" />
 </p>
 
 # Islands
