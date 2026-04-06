@@ -1,0 +1,7 @@
+.DS_Store
+.build/
+Islands.app/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
