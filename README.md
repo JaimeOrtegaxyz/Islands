@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="islands.webp" alt="Islands logo" width="600" />
+</p>
+
 # Islands
 
 `Islands` is a native Swift window manager for macOS.
