@@ -55,6 +55,48 @@ final class ScreenManager {
         return best
     }
 
+    /// Find the screen above (north of) the screen containing a point
+    func screenToNorth(of point: CGPoint) -> NSScreen? {
+        guard let current = screen(for: point) else { return nil }
+        let currentFrame = current.frame
+        // In NSScreen coords (bottom-left origin), "above" means higher Y values
+        var best: NSScreen?
+        var bestDist = CGFloat.greatestFiniteMagnitude
+        for s in screens {
+            if s == current { continue }
+            let sf = s.frame
+            if sf.minY >= currentFrame.maxY - 1 {
+                let dist = sf.minY - currentFrame.maxY
+                if dist < bestDist {
+                    bestDist = dist
+                    best = s
+                }
+            }
+        }
+        return best
+    }
+
+    /// Find the screen below (south of) the screen containing a point
+    func screenToSouth(of point: CGPoint) -> NSScreen? {
+        guard let current = screen(for: point) else { return nil }
+        let currentFrame = current.frame
+        // In NSScreen coords (bottom-left origin), "below" means lower Y values
+        var best: NSScreen?
+        var bestDist = CGFloat.greatestFiniteMagnitude
+        for s in screens {
+            if s == current { continue }
+            let sf = s.frame
+            if sf.maxY <= currentFrame.minY + 1 {
+                let dist = currentFrame.minY - sf.maxY
+                if dist < bestDist {
+                    bestDist = dist
+                    best = s
+                }
+            }
+        }
+        return best
+    }
+
     /// Find the screen to the west of the screen containing a point
     func screenToWest(of point: CGPoint) -> NSScreen? {
         guard let current = screen(for: point) else { return nil }

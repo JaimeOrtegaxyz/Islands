@@ -333,13 +333,22 @@ final class WindowManager {
         }
 
         if state.vIdx == 1 {
-            state.vIdx = 3  // wrap
+            // At top extreme — overflow to north monitor or wrap
+            if let pos = engine.getPosition(window),
+               let target = screens.screenToNorth(of: pos) {
+                state.vIdx = 5
+                winState[windowID] = state
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+            } else {
+                state.vIdx = 3  // wrap
+                winState[windowID] = state
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            }
         } else {
             state.vIdx -= 1
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
         }
-
-        winState[windowID] = state
-        finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
     }
 
     func moveDown() {
@@ -357,13 +366,22 @@ final class WindowManager {
         }
 
         if state.vIdx == 7 {
-            state.vIdx = 5  // wrap
+            // At bottom extreme — overflow to south monitor or wrap
+            if let pos = engine.getPosition(window),
+               let target = screens.screenToSouth(of: pos) {
+                state.vIdx = 3
+                winState[windowID] = state
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+            } else {
+                state.vIdx = 5  // wrap
+                winState[windowID] = state
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            }
         } else {
             state.vIdx += 1
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
         }
-
-        winState[windowID] = state
-        finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
     }
 
     // MARK: - Centered Mode
