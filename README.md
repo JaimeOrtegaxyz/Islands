@@ -12,7 +12,7 @@ Keybindings tile windows across a multi-position spectrum per axis. Hit it again
 
 | Shortcut | What it does |
 |---|---|
-| `Ctrl+Opt+←` | Cycle left (¾ → ½ → ¼ → overflow to next monitor) |
+| `Ctrl+Opt+←` | Cycle left (¾ → ⅔ → ½ → ⅓ → ¼ → overflow to next monitor) |
 | `Ctrl+Opt+→` | Cycle right |
 | `Ctrl+Opt+↑` | Cycle up |
 | `Ctrl+Opt+↓` | Cycle down |

@@ -17,12 +17,12 @@ struct PositionEntry {
 }
 
 struct WindowState {
-    var hIdx: Int = 4          // 1-7, index into hPos
-    var vIdx: Int = 4          // 1-7, index into vPos
+    var hIdx: Int = 6          // 1-11, index into hPos
+    var vIdx: Int = 6          // 1-11, index into vPos
     var hCentered: Bool = false
     var vCentered: Bool = false
-    var hCenterIdx: Int = 1    // 1-4, index into hCenterPos
-    var vCenterIdx: Int = 1    // 1-4, index into vCenterPos
+    var hCenterIdx: Int = 1    // 1-6, index into hCenterPos
+    var vCenterIdx: Int = 1    // 1-6, index into vCenterPos
     var currentZone: String?   // zone key this window is registered in
 }
 
@@ -32,49 +32,61 @@ final class WindowManager {
     private let engine: WindowEngine
     private let screens: ScreenManager
 
-    // Position tables (direct port of init.lua lines 23-55)
+    // Position tables
     private let hPos: [PositionEntry] = [
-        PositionEntry(offset: 0,    size: 1.0/4),  // 1: left quarter
-        PositionEntry(offset: 0,    size: 1.0/2),  // 2: left half
-        PositionEntry(offset: 0,    size: 3.0/4),  // 3: left three quarters
-        PositionEntry(offset: 0,    size: 1),       // 4: full width
-        PositionEntry(offset: 1.0/4, size: 3.0/4), // 5: right three quarters
-        PositionEntry(offset: 1.0/2, size: 1.0/2), // 6: right half
-        PositionEntry(offset: 3.0/4, size: 1.0/4), // 7: right quarter
+        PositionEntry(offset: 0,     size: 1.0/4),  // 1:  left quarter
+        PositionEntry(offset: 0,     size: 1.0/3),  // 2:  left third
+        PositionEntry(offset: 0,     size: 1.0/2),  // 3:  left half
+        PositionEntry(offset: 0,     size: 2.0/3),  // 4:  left two thirds
+        PositionEntry(offset: 0,     size: 3.0/4),  // 5:  left three quarters
+        PositionEntry(offset: 0,     size: 1),       // 6:  full width
+        PositionEntry(offset: 1.0/4, size: 3.0/4),  // 7:  right three quarters
+        PositionEntry(offset: 1.0/3, size: 2.0/3),  // 8:  right two thirds
+        PositionEntry(offset: 1.0/2, size: 1.0/2),  // 9:  right half
+        PositionEntry(offset: 2.0/3, size: 1.0/3),  // 10: right third
+        PositionEntry(offset: 3.0/4, size: 1.0/4),  // 11: right quarter
     ]
 
     private let vPos: [PositionEntry] = [
-        PositionEntry(offset: 0,    size: 1.0/4),  // 1: top quarter
-        PositionEntry(offset: 0,    size: 1.0/2),  // 2: top half
-        PositionEntry(offset: 0,    size: 3.0/4),  // 3: top three quarters
-        PositionEntry(offset: 0,    size: 1),       // 4: full height
-        PositionEntry(offset: 1.0/4, size: 3.0/4), // 5: bottom three quarters
-        PositionEntry(offset: 1.0/2, size: 1.0/2), // 6: bottom half
-        PositionEntry(offset: 3.0/4, size: 1.0/4), // 7: bottom quarter
+        PositionEntry(offset: 0,     size: 1.0/4),  // 1:  top quarter
+        PositionEntry(offset: 0,     size: 1.0/3),  // 2:  top third
+        PositionEntry(offset: 0,     size: 1.0/2),  // 3:  top half
+        PositionEntry(offset: 0,     size: 2.0/3),  // 4:  top two thirds
+        PositionEntry(offset: 0,     size: 3.0/4),  // 5:  top three quarters
+        PositionEntry(offset: 0,     size: 1),       // 6:  full height
+        PositionEntry(offset: 1.0/4, size: 3.0/4),  // 7:  bottom three quarters
+        PositionEntry(offset: 1.0/3, size: 2.0/3),  // 8:  bottom two thirds
+        PositionEntry(offset: 1.0/2, size: 1.0/2),  // 9:  bottom half
+        PositionEntry(offset: 2.0/3, size: 1.0/3),  // 10: bottom third
+        PositionEntry(offset: 3.0/4, size: 1.0/4),  // 11: bottom quarter
     ]
 
     private let hCenterPos: [PositionEntry] = [
         PositionEntry(offset: 0,     size: 1),       // 1: full width
         PositionEntry(offset: 1.0/8, size: 3.0/4),  // 2: centered 3/4
-        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 3: centered 1/2
-        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 4: centered 1/4
+        PositionEntry(offset: 1.0/6, size: 2.0/3),  // 3: centered 2/3
+        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 4: centered 1/2
+        PositionEntry(offset: 1.0/3, size: 1.0/3),  // 5: centered 1/3
+        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 6: centered 1/4
     ]
 
     private let vCenterPos: [PositionEntry] = [
         PositionEntry(offset: 0,     size: 1),       // 1: full height
         PositionEntry(offset: 1.0/8, size: 3.0/4),  // 2: centered 3/4
-        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 3: centered 1/2
-        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 4: centered 1/4
+        PositionEntry(offset: 1.0/6, size: 2.0/3),  // 3: centered 2/3
+        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 4: centered 1/2
+        PositionEntry(offset: 1.0/3, size: 1.0/3),  // 5: centered 1/3
+        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 6: centered 1/4
     ]
 
-    // Mapping tables (direct port of init.lua lines 61-67)
-    private let edgeToCenterH: [Int: Int] = [1:4, 2:3, 3:2, 4:1, 5:2, 6:3, 7:4]
-    private let edgeToCenterV: [Int: Int] = [1:4, 2:3, 3:2, 4:1, 5:2, 6:3, 7:4]
+    // Mapping tables
+    private let edgeToCenterH: [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1, 7:2, 8:3, 9:4, 10:5, 11:6]
+    private let edgeToCenterV: [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1, 7:2, 8:3, 9:4, 10:5, 11:6]
 
-    private let centerToEdgeLeft:  [Int: Int] = [1:4, 2:3, 3:2, 4:1]
-    private let centerToEdgeRight: [Int: Int] = [1:4, 2:5, 3:6, 4:7]
-    private let centerToEdgeUp:    [Int: Int] = [1:4, 2:3, 3:2, 4:1]
-    private let centerToEdgeDown:  [Int: Int] = [1:4, 2:5, 3:6, 4:7]
+    private let centerToEdgeLeft:  [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1]
+    private let centerToEdgeRight: [Int: Int] = [1:6, 2:7, 3:8, 4:9, 5:10, 6:11]
+    private let centerToEdgeUp:    [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1]
+    private let centerToEdgeDown:  [Int: Int] = [1:6, 2:7, 3:8, 4:9, 5:10, 6:11]
 
     // Per-window state
     private var winState: [CGWindowID: WindowState] = [:]
@@ -270,11 +282,11 @@ final class WindowManager {
             // At left extreme — overflow to west monitor or wrap
             if let pos = engine.getPosition(window),
                let target = screens.screenToWest(of: pos) {
-                state.hIdx = 5
+                state.hIdx = 7
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
             } else {
-                state.hIdx = 3
+                state.hIdx = 5
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -299,15 +311,15 @@ final class WindowManager {
             return
         }
 
-        if state.hIdx == 7 {
+        if state.hIdx == 11 {
             // At right extreme — overflow to east monitor or wrap
             if let pos = engine.getPosition(window),
                let target = screens.screenToEast(of: pos) {
-                state.hIdx = 3
+                state.hIdx = 5
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
             } else {
-                state.hIdx = 5
+                state.hIdx = 7
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -336,11 +348,11 @@ final class WindowManager {
             // At top extreme — overflow to north monitor or wrap
             if let pos = engine.getPosition(window),
                let target = screens.screenToNorth(of: pos) {
-                state.vIdx = 5
+                state.vIdx = 7
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
             } else {
-                state.vIdx = 3  // wrap
+                state.vIdx = 5  // wrap
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -365,15 +377,15 @@ final class WindowManager {
             return
         }
 
-        if state.vIdx == 7 {
+        if state.vIdx == 11 {
             // At bottom extreme — overflow to south monitor or wrap
             if let pos = engine.getPosition(window),
                let target = screens.screenToSouth(of: pos) {
-                state.vIdx = 3
+                state.vIdx = 5
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
             } else {
-                state.vIdx = 5  // wrap
+                state.vIdx = 7  // wrap
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -398,9 +410,9 @@ final class WindowManager {
         } else {
             switch direction {
             case .shrink:
-                state.hCenterIdx = state.hCenterIdx == 4 ? 1 : state.hCenterIdx + 1
+                state.hCenterIdx = state.hCenterIdx == 6 ? 1 : state.hCenterIdx + 1
             case .grow:
-                state.hCenterIdx = state.hCenterIdx == 1 ? 4 : state.hCenterIdx - 1
+                state.hCenterIdx = state.hCenterIdx == 1 ? 6 : state.hCenterIdx - 1
             }
         }
 
@@ -420,9 +432,9 @@ final class WindowManager {
         } else {
             switch direction {
             case .shrink:
-                state.vCenterIdx = state.vCenterIdx == 4 ? 1 : state.vCenterIdx + 1
+                state.vCenterIdx = state.vCenterIdx == 6 ? 1 : state.vCenterIdx + 1
             case .grow:
-                state.vCenterIdx = state.vCenterIdx == 1 ? 4 : state.vCenterIdx - 1
+                state.vCenterIdx = state.vCenterIdx == 1 ? 6 : state.vCenterIdx - 1
             }
         }
 
@@ -438,8 +450,8 @@ final class WindowManager {
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
-        state.hIdx = 4
-        state.vIdx = 4
+        state.hIdx = 6
+        state.vIdx = 6
         state.hCentered = false
         state.vCentered = false
 
