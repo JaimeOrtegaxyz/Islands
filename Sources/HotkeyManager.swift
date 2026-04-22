@@ -3,10 +3,12 @@ import Foundation
 
 final class HotkeyManager {
     private let windowManager: WindowManager
+    private let settingsStore: SettingsStore
     private var hotkeyRefs: [EventHotKeyRef?] = []
     private var handlers: [UInt32: () -> Void] = [:]
     private var eventHandler: EventHandlerRef?
     private var nextID: UInt32 = 1
+    private var isEnabled = false
 
     // Carbon key codes
     private static let kVK_LeftArrow:  UInt32 = 0x7B  // 123
@@ -16,41 +18,61 @@ final class HotkeyManager {
     private static let kVK_Return:     UInt32 = 0x24  // 36
     private static let kVK_Tab:        UInt32 = 0x30  // 48
 
-    // Carbon modifier flags
-    private static let controlBit:     UInt32 = UInt32(controlKey)   // 1 << 12
-    private static let optionBit:      UInt32 = UInt32(optionKey)    // 1 << 11
-    private static let cmdBit:         UInt32 = UInt32(cmdKey)       // 1 << 8
-    private static let shiftBit:       UInt32 = UInt32(shiftKey)     // 1 << 9
-
-    init(windowManager: WindowManager) {
+    init(windowManager: WindowManager, settingsStore: SettingsStore) {
         self.windowManager = windowManager
+        self.settingsStore = settingsStore
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsDidChange),
+            name: .settingsDidChange,
+            object: settingsStore
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        unregisterAll()
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard enabled != isEnabled else { return }
+        isEnabled = enabled
+
+        if enabled {
+            registerAll()
+        } else {
+            unregisterAll()
+        }
     }
 
     func registerAll() {
+        unregisterAll()
         installHandler()
 
-        let ctrlOpt = Self.controlBit | Self.optionBit
-        let ctrlOptCmd = ctrlOpt | Self.cmdBit
-        let ctrlOptShift = ctrlOpt | Self.shiftBit
+        let settings = settingsStore.snapshot
+        let base = settings.baseModifiers.carbonFlags
+        let reverse = settings.reverseCycleModifiers.carbonFlags
+        let centered = settings.centeredModeModifiers.carbonFlags
 
-        // Edge-snap: Ctrl+Option + arrows
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_LeftArrow)  { [weak self] in self?.windowManager.moveLeft() }
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_RightArrow) { [weak self] in self?.windowManager.moveRight() }
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_UpArrow)    { [weak self] in self?.windowManager.moveUp() }
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_DownArrow)  { [weak self] in self?.windowManager.moveDown() }
+        // Edge-snap: base modifiers + arrows
+        register(modifiers: base, keyCode: Self.kVK_LeftArrow)  { [weak self] in self?.windowManager.moveLeft() }
+        register(modifiers: base, keyCode: Self.kVK_RightArrow) { [weak self] in self?.windowManager.moveRight() }
+        register(modifiers: base, keyCode: Self.kVK_UpArrow)    { [weak self] in self?.windowManager.moveUp() }
+        register(modifiers: base, keyCode: Self.kVK_DownArrow)  { [weak self] in self?.windowManager.moveDown() }
 
-        // Reset: Ctrl+Option + Return
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_Return) { [weak self] in self?.windowManager.resetWindow() }
+        // Reset: base modifiers + Return
+        register(modifiers: base, keyCode: Self.kVK_Return) { [weak self] in self?.windowManager.resetWindow() }
 
-        // Zone cycling: Ctrl+Option + Tab / Ctrl+Option+Shift + Tab
-        register(modifiers: ctrlOpt, keyCode: Self.kVK_Tab)      { [weak self] in self?.windowManager.cycleZone(direction: .forward) }
-        register(modifiers: ctrlOptShift, keyCode: Self.kVK_Tab)  { [weak self] in self?.windowManager.cycleZone(direction: .backward) }
+        // Zone cycling: base modifiers + Tab / base modifiers + extra modifiers + Tab
+        register(modifiers: base, keyCode: Self.kVK_Tab) { [weak self] in self?.windowManager.cycleZone(direction: .forward) }
+        register(modifiers: reverse, keyCode: Self.kVK_Tab) { [weak self] in self?.windowManager.cycleZone(direction: .backward) }
 
-        // Centered mode: Ctrl+Option+Cmd + arrows
-        register(modifiers: ctrlOptCmd, keyCode: Self.kVK_LeftArrow)  { [weak self] in self?.windowManager.centerH(direction: .shrink) }
-        register(modifiers: ctrlOptCmd, keyCode: Self.kVK_RightArrow) { [weak self] in self?.windowManager.centerH(direction: .grow) }
-        register(modifiers: ctrlOptCmd, keyCode: Self.kVK_UpArrow)    { [weak self] in self?.windowManager.centerV(direction: .shrink) }
-        register(modifiers: ctrlOptCmd, keyCode: Self.kVK_DownArrow)  { [weak self] in self?.windowManager.centerV(direction: .grow) }
+        // Centered mode: base modifiers + extra modifiers + arrows
+        register(modifiers: centered, keyCode: Self.kVK_LeftArrow)  { [weak self] in self?.windowManager.centerH(direction: .shrink) }
+        register(modifiers: centered, keyCode: Self.kVK_RightArrow) { [weak self] in self?.windowManager.centerH(direction: .grow) }
+        register(modifiers: centered, keyCode: Self.kVK_UpArrow)    { [weak self] in self?.windowManager.centerV(direction: .shrink) }
+        register(modifiers: centered, keyCode: Self.kVK_DownArrow)  { [weak self] in self?.windowManager.centerV(direction: .grow) }
     }
 
     func unregisterAll() {
@@ -61,6 +83,7 @@ final class HotkeyManager {
         }
         hotkeyRefs.removeAll()
         handlers.removeAll()
+        nextID = 1
 
         if let handler = eventHandler {
             RemoveEventHandler(handler)
@@ -69,6 +92,11 @@ final class HotkeyManager {
     }
 
     // MARK: - Private
+
+    @objc private func settingsDidChange() {
+        guard isEnabled else { return }
+        registerAll()
+    }
 
     private func installHandler() {
         var eventType = EventTypeSpec(
@@ -123,5 +151,24 @@ final class HotkeyManager {
         } else {
             print("Failed to register hotkey \(id): \(status)")
         }
+    }
+}
+
+private extension ModifierSet {
+    var carbonFlags: UInt32 {
+        var flags: UInt32 = 0
+        if contains(.control) {
+            flags |= UInt32(controlKey)
+        }
+        if contains(.option) {
+            flags |= UInt32(optionKey)
+        }
+        if contains(.command) {
+            flags |= UInt32(cmdKey)
+        }
+        if contains(.shift) {
+            flags |= UInt32(shiftKey)
+        }
+        return flags
     }
 }

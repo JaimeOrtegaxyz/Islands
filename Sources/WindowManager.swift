@@ -12,18 +12,73 @@ enum CenterDirection {
 }
 
 struct PositionEntry {
-    let offset: CGFloat  // x or y fraction
-    let size: CGFloat    // w or h fraction
+    let offset: CGFloat
+    let size: CGFloat
 }
 
 struct WindowState {
-    var hIdx: Int = 6          // 1-11, index into hPos
-    var vIdx: Int = 6          // 1-11, index into vPos
+    var hIdx: Int
+    var vIdx: Int
     var hCentered: Bool = false
     var vCentered: Bool = false
-    var hCenterIdx: Int = 1    // 1-6, index into hCenterPos
-    var vCenterIdx: Int = 1    // 1-6, index into vCenterPos
-    var currentZone: String?   // zone key this window is registered in
+    var hCenterIdx: Int = 1
+    var vCenterIdx: Int = 1
+    var currentZone: String?
+}
+
+private struct AxisLayout {
+    let edgePositions: [PositionEntry]
+    let centerPositions: [PositionEntry]
+    let edgeToCenter: [Int: Int]
+    let centerToLeading: [Int: Int]
+    let centerToTrailing: [Int: Int]
+    let fullEdgeIndex: Int
+
+    var maxEdgeIndex: Int {
+        edgePositions.count
+    }
+
+    static func make(for profile: SnapProfile) -> AxisLayout {
+        let fractions = profile.availableFractions
+        let fullEdgeIndex = fractions.count + 1
+
+        var edgePositions = fractions.map { PositionEntry(offset: 0, size: $0) }
+        edgePositions.append(PositionEntry(offset: 0, size: 1))
+        edgePositions.append(contentsOf: fractions.reversed().map { PositionEntry(offset: 1 - $0, size: $0) })
+
+        var centerPositions = [PositionEntry(offset: 0, size: 1)]
+        centerPositions.append(contentsOf: fractions.reversed().map { PositionEntry(offset: (1 - $0) / 2, size: $0) })
+
+        let centerIndexBySize = Dictionary(uniqueKeysWithValues: fractions.reversed().enumerated().map { ($1, $0 + 2) })
+        let leadingIndexBySize = Dictionary(uniqueKeysWithValues: fractions.enumerated().map { ($1, $0 + 1) })
+        let trailingIndexBySize = Dictionary(uniqueKeysWithValues: fractions.reversed().enumerated().map { ($1, fullEdgeIndex + $0 + 1) })
+
+        var edgeToCenter: [Int: Int] = [fullEdgeIndex: 1]
+        var centerToLeading: [Int: Int] = [1: fullEdgeIndex]
+        var centerToTrailing: [Int: Int] = [1: fullEdgeIndex]
+
+        for fraction in fractions {
+            guard let centerIndex = centerIndexBySize[fraction],
+                  let leadingIndex = leadingIndexBySize[fraction],
+                  let trailingIndex = trailingIndexBySize[fraction] else {
+                continue
+            }
+
+            edgeToCenter[leadingIndex] = centerIndex
+            edgeToCenter[trailingIndex] = centerIndex
+            centerToLeading[centerIndex] = leadingIndex
+            centerToTrailing[centerIndex] = trailingIndex
+        }
+
+        return AxisLayout(
+            edgePositions: edgePositions,
+            centerPositions: centerPositions,
+            edgeToCenter: edgeToCenter,
+            centerToLeading: centerToLeading,
+            centerToTrailing: centerToTrailing,
+            fullEdgeIndex: fullEdgeIndex
+        )
+    }
 }
 
 // MARK: - Window Manager
@@ -31,112 +86,101 @@ struct WindowState {
 final class WindowManager {
     private let engine: WindowEngine
     private let screens: ScreenManager
+    private let settingsStore: SettingsStore
+    private let monitorOverflowEnabled = true
 
-    // Position tables
-    private let hPos: [PositionEntry] = [
-        PositionEntry(offset: 0,     size: 1.0/4),  // 1:  left quarter
-        PositionEntry(offset: 0,     size: 1.0/3),  // 2:  left third
-        PositionEntry(offset: 0,     size: 1.0/2),  // 3:  left half
-        PositionEntry(offset: 0,     size: 2.0/3),  // 4:  left two thirds
-        PositionEntry(offset: 0,     size: 3.0/4),  // 5:  left three quarters
-        PositionEntry(offset: 0,     size: 1),       // 6:  full width
-        PositionEntry(offset: 1.0/4, size: 3.0/4),  // 7:  right three quarters
-        PositionEntry(offset: 1.0/3, size: 2.0/3),  // 8:  right two thirds
-        PositionEntry(offset: 1.0/2, size: 1.0/2),  // 9:  right half
-        PositionEntry(offset: 2.0/3, size: 1.0/3),  // 10: right third
-        PositionEntry(offset: 3.0/4, size: 1.0/4),  // 11: right quarter
-    ]
-
-    private let vPos: [PositionEntry] = [
-        PositionEntry(offset: 0,     size: 1.0/4),  // 1:  top quarter
-        PositionEntry(offset: 0,     size: 1.0/3),  // 2:  top third
-        PositionEntry(offset: 0,     size: 1.0/2),  // 3:  top half
-        PositionEntry(offset: 0,     size: 2.0/3),  // 4:  top two thirds
-        PositionEntry(offset: 0,     size: 3.0/4),  // 5:  top three quarters
-        PositionEntry(offset: 0,     size: 1),       // 6:  full height
-        PositionEntry(offset: 1.0/4, size: 3.0/4),  // 7:  bottom three quarters
-        PositionEntry(offset: 1.0/3, size: 2.0/3),  // 8:  bottom two thirds
-        PositionEntry(offset: 1.0/2, size: 1.0/2),  // 9:  bottom half
-        PositionEntry(offset: 2.0/3, size: 1.0/3),  // 10: bottom third
-        PositionEntry(offset: 3.0/4, size: 1.0/4),  // 11: bottom quarter
-    ]
-
-    private let hCenterPos: [PositionEntry] = [
-        PositionEntry(offset: 0,     size: 1),       // 1: full width
-        PositionEntry(offset: 1.0/8, size: 3.0/4),  // 2: centered 3/4
-        PositionEntry(offset: 1.0/6, size: 2.0/3),  // 3: centered 2/3
-        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 4: centered 1/2
-        PositionEntry(offset: 1.0/3, size: 1.0/3),  // 5: centered 1/3
-        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 6: centered 1/4
-    ]
-
-    private let vCenterPos: [PositionEntry] = [
-        PositionEntry(offset: 0,     size: 1),       // 1: full height
-        PositionEntry(offset: 1.0/8, size: 3.0/4),  // 2: centered 3/4
-        PositionEntry(offset: 1.0/6, size: 2.0/3),  // 3: centered 2/3
-        PositionEntry(offset: 1.0/4, size: 1.0/2),  // 4: centered 1/2
-        PositionEntry(offset: 1.0/3, size: 1.0/3),  // 5: centered 1/3
-        PositionEntry(offset: 3.0/8, size: 1.0/4),  // 6: centered 1/4
-    ]
-
-    // Mapping tables
-    private let edgeToCenterH: [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1, 7:2, 8:3, 9:4, 10:5, 11:6]
-    private let edgeToCenterV: [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1, 7:2, 8:3, 9:4, 10:5, 11:6]
-
-    private let centerToEdgeLeft:  [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1]
-    private let centerToEdgeRight: [Int: Int] = [1:6, 2:7, 3:8, 4:9, 5:10, 6:11]
-    private let centerToEdgeUp:    [Int: Int] = [1:6, 2:5, 3:4, 4:3, 5:2, 6:1]
-    private let centerToEdgeDown:  [Int: Int] = [1:6, 2:7, 3:8, 4:9, 5:10, 6:11]
+    private var horizontalLayout: AxisLayout
+    private var verticalLayout: AxisLayout
+    private var peekPixels: CGFloat
 
     // Per-window state
     private var winState: [CGWindowID: WindowState] = [:]
 
     // Zone tracking (accordion stacking)
-    private let PEEK_PX: CGFloat = 8
-    private var zoneWindows: [String: [CGWindowID]] = [:]  // zone key -> ordered window IDs (index 0 = front)
+    private var zoneWindows: [String: [CGWindowID]] = [:]
 
     // Cleanup timer
     private var cleanupTimer: Timer?
+    private var settingsObserver: NSObjectProtocol?
 
-    init(engine: WindowEngine, screens: ScreenManager) {
+    init(engine: WindowEngine, screens: ScreenManager, settingsStore: SettingsStore) {
         self.engine = engine
         self.screens = screens
+        self.settingsStore = settingsStore
 
-        // Periodic cleanup of stale window entries
+        let settings = settingsStore.snapshot
+        horizontalLayout = AxisLayout.make(for: settings.snapProfile)
+        verticalLayout = AxisLayout.make(for: settings.snapProfile)
+        peekPixels = settings.peekSize.points
+
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             self?.cleanupStaleWindows()
+        }
+
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: .settingsDidChange,
+            object: settingsStore,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyLatestSettings()
+        }
+    }
+
+    deinit {
+        cleanupTimer?.invalidate()
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
         }
     }
 
     // MARK: - State Management
 
+    private func makeInitialState() -> WindowState {
+        WindowState(hIdx: horizontalLayout.fullEdgeIndex, vIdx: verticalLayout.fullEdgeIndex)
+    }
+
     private func getState(for windowID: CGWindowID) -> WindowState {
         if winState[windowID] == nil {
-            winState[windowID] = WindowState()
+            winState[windowID] = makeInitialState()
         }
         return winState[windowID]!
+    }
+
+    private func applyLatestSettings() {
+        let settings = settingsStore.snapshot
+        let oldFullIndex = horizontalLayout.fullEdgeIndex
+        let newHorizontalLayout = AxisLayout.make(for: settings.snapProfile)
+        let newVerticalLayout = AxisLayout.make(for: settings.snapProfile)
+        let layoutChanged = newHorizontalLayout.fullEdgeIndex != oldFullIndex
+            || newHorizontalLayout.edgePositions.count != horizontalLayout.edgePositions.count
+
+        horizontalLayout = newHorizontalLayout
+        verticalLayout = newVerticalLayout
+
+        let previousPeek = peekPixels
+        peekPixels = settings.peekSize.points
+
+        if layoutChanged {
+            winState.removeAll()
+            zoneWindows.removeAll()
+            return
+        }
+
+        if previousPeek != peekPixels {
+            refreshAllZones()
+        }
     }
 
     // MARK: - Zone Tracking
 
     private func getZoneKey(state: WindowState, screenID: String) -> String {
-        let hPart: String
-        if state.hCentered {
-            hPart = "ch\(state.hCenterIdx)"
-        } else {
-            hPart = "h\(state.hIdx)"
-        }
-        let vPart: String
-        if state.vCentered {
-            vPart = "cv\(state.vCenterIdx)"
-        } else {
-            vPart = "v\(state.vIdx)"
-        }
-        return "\(screenID)_\(hPart)_\(vPart)"
+        let horizontalPart = state.hCentered ? "ch\(state.hCenterIdx)" : "h\(state.hIdx)"
+        let verticalPart = state.vCentered ? "cv\(state.vCenterIdx)" : "v\(state.vIdx)"
+        return "\(screenID)_\(horizontalPart)_\(verticalPart)"
     }
 
     private func removeFromZone(windowID: CGWindowID, zoneKey: String?) {
-        guard let zoneKey = zoneKey, zoneWindows[zoneKey] != nil else { return }
+        guard let zoneKey, zoneWindows[zoneKey] != nil else { return }
         zoneWindows[zoneKey]?.removeAll { $0 == windowID }
         if zoneWindows[zoneKey]?.isEmpty == true {
             zoneWindows[zoneKey] = nil
@@ -147,91 +191,134 @@ final class WindowManager {
         if zoneWindows[zoneKey] == nil {
             zoneWindows[zoneKey] = []
         }
-        // Add to front of the stack
-        zoneWindows[zoneKey]!.insert(windowID, at: 0)
+        zoneWindows[zoneKey]?.removeAll { $0 == windowID }
+        zoneWindows[zoneKey]?.insert(windowID, at: 0)
     }
 
-    // MARK: - Frame Application
+    private func refreshAllZones() {
+        for zoneKey in zoneWindows.keys {
+            applyPeekOffsets(zoneKey: zoneKey, shouldFocusFront: false)
+        }
+    }
 
-    /// Apply frame to a window based on its state.
-    /// peekInset: pixels to shave off the top for accordion stacking peek.
-    private func applyFrame(window: AXUIElement, windowID: CGWindowID, state: WindowState, targetScreen: NSScreen?, peekInset: CGFloat = 0) {
+    // MARK: - Frame Calculation
+
+    private func frame(for state: WindowState, screenFrame: CGRect, peekInset: CGFloat = 0) -> CGRect {
+        let horizontalEntry = state.hCentered
+            ? horizontalLayout.centerPositions[state.hCenterIdx - 1]
+            : horizontalLayout.edgePositions[state.hIdx - 1]
+
+        let verticalEntry = state.vCentered
+            ? verticalLayout.centerPositions[state.vCenterIdx - 1]
+            : verticalLayout.edgePositions[state.vIdx - 1]
+
+        return CGRect(
+            x: screenFrame.origin.x + screenFrame.width * horizontalEntry.offset,
+            y: screenFrame.origin.y + screenFrame.height * verticalEntry.offset + peekInset,
+            width: screenFrame.width * horizontalEntry.size,
+            height: screenFrame.height * verticalEntry.size - peekInset
+        )
+    }
+
+    private func applyFrame(window: AXUIElement, state: WindowState, targetScreen: NSScreen?, peekInset: CGFloat = 0) {
         let screenFrame: CGRect
-        if let target = targetScreen {
-            screenFrame = screens.visibleFrame(of: target)
-        } else if let pos = engine.getPosition(window),
-                  let frame = screens.screenFrame(for: pos) {
-            screenFrame = frame
+        if let targetScreen {
+            screenFrame = screens.visibleFrame(of: targetScreen)
+        } else if let position = engine.getPosition(window),
+                  let currentScreenFrame = screens.screenFrame(for: position) {
+            screenFrame = currentScreenFrame
         } else {
             return
         }
 
-        let hx: CGFloat, hw: CGFloat
-        if state.hCentered {
-            let c = hCenterPos[state.hCenterIdx - 1]  // 1-based to 0-based
-            hx = c.offset; hw = c.size
-        } else {
-            let h = hPos[state.hIdx - 1]  // 1-based to 0-based
-            hx = h.offset; hw = h.size
-        }
-
-        let vy: CGFloat, vh: CGFloat
-        if state.vCentered {
-            let c = vCenterPos[state.vCenterIdx - 1]
-            vy = c.offset; vh = c.size
-        } else {
-            let v = vPos[state.vIdx - 1]
-            vy = v.offset; vh = v.size
-        }
-
-        let frame = CGRect(
-            x: screenFrame.origin.x + screenFrame.width * hx,
-            y: screenFrame.origin.y + screenFrame.height * vy + peekInset,
-            width: screenFrame.width * hw,
-            height: screenFrame.height * vh - peekInset
-        )
-
-        engine.setFrame(window, frame: frame)
+        engine.setFrame(window, frame: frame(for: state, screenFrame: screenFrame, peekInset: peekInset))
     }
 
-    /// Reposition all windows in a zone with peek offsets (accordion stacking).
-    private func applyPeekOffsets(zoneKey: String) {
+    private func peekInsetForWindow(windowID: CGWindowID, zoneKey: String) -> CGFloat {
+        guard let windows = zoneWindows[zoneKey],
+              let index = windows.firstIndex(of: windowID) else {
+            return 0
+        }
+
+        return CGFloat(windows.count - 1 - index) * peekPixels
+    }
+
+    private func framesApproximatelyEqual(_ lhs: CGRect, _ rhs: CGRect, tolerance: CGFloat = 6) -> Bool {
+        abs(lhs.origin.x - rhs.origin.x) <= tolerance
+            && abs(lhs.origin.y - rhs.origin.y) <= tolerance
+            && abs(lhs.size.width - rhs.size.width) <= tolerance
+            && abs(lhs.size.height - rhs.size.height) <= tolerance
+    }
+
+    private func synchronizeZoneMembership(for windowID: CGWindowID, window: AXUIElement) {
+        guard var state = winState[windowID],
+              let oldZone = state.currentZone,
+              let position = engine.getPosition(window),
+              let actualFrame = engine.getFrame(window),
+              let screenFrame = screens.screenFrame(for: position) else {
+            return
+        }
+
+        let expectedFrame = frame(
+            for: state,
+            screenFrame: screenFrame,
+            peekInset: peekInsetForWindow(windowID: windowID, zoneKey: oldZone)
+        )
+        let liveZone = getZoneKey(state: state, screenID: screens.screenID(for: position))
+
+        guard framesApproximatelyEqual(actualFrame, expectedFrame) else {
+            removeFromZone(windowID: windowID, zoneKey: oldZone)
+            state.currentZone = nil
+            winState[windowID] = state
+            applyPeekOffsets(zoneKey: oldZone, shouldFocusFront: false)
+            return
+        }
+
+        guard liveZone != oldZone else { return }
+
+        removeFromZone(windowID: windowID, zoneKey: oldZone)
+        addToZone(windowID: windowID, zoneKey: liveZone)
+        state.currentZone = liveZone
+        winState[windowID] = state
+        applyPeekOffsets(zoneKey: oldZone, shouldFocusFront: false)
+        applyPeekOffsets(zoneKey: liveZone, shouldFocusFront: false)
+    }
+
+    // MARK: - Accordion Stacking
+
+    private func applyPeekOffsets(zoneKey: String, shouldFocusFront: Bool = true) {
         guard let windowIDs = zoneWindows[zoneKey] else { return }
-        let count = windowIDs.count
 
-        // Resolve all window AXUIElements
         var resolved: [(index: Int, window: AXUIElement, id: CGWindowID)] = []
-        for (i, wid) in windowIDs.enumerated() {
-            if winState[wid] != nil, let axWindow = engine.windowElement(for: wid) {
-                resolved.append((index: i, window: axWindow, id: wid))
+        for (index, windowID) in windowIDs.enumerated() {
+            if winState[windowID] != nil, let window = engine.windowElement(for: windowID) {
+                resolved.append((index: index, window: window, id: windowID))
             }
         }
 
-        // 1. Set all frames: back windows are taller, front is shortest
+        let count = resolved.count
+        guard count > 0 else {
+            zoneWindows[zoneKey] = nil
+            return
+        }
+
         for entry in resolved {
-            let layer = entry.index
-            let inset = CGFloat(count - 1 - layer) * PEEK_PX
-            applyFrame(window: entry.window, windowID: entry.id, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
+            let inset = CGFloat(count - 1 - entry.index) * peekPixels
+            applyFrame(window: entry.window, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
         }
 
-        // 2. Raise background windows back-to-front for correct z-ordering
-        for entry in resolved.reversed() {
-            if entry.index > 0 {
-                engine.raise(entry.window)
-            }
+        for entry in resolved.reversed() where entry.index > 0 {
+            engine.raise(entry.window)
         }
 
-        // 3. Focus only the front window
-        if let front = resolved.first(where: { $0.index == 0 }) {
+        if shouldFocusFront, let front = resolved.first {
             engine.focus(front.window)
         }
     }
 
-    /// Handle zone transition after state change.
     private func finishMove(window: AXUIElement, windowID: CGWindowID, oldZone: String?, targetScreen: NSScreen?) {
-        // For monitor overflow, move window to target screen first
-        if let target = targetScreen {
-            let targetFrame = screens.visibleFrame(of: target)
+        if let targetScreen {
+            let targetFrame = screens.visibleFrame(of: targetScreen)
             engine.setFrame(window, frame: CGRect(
                 origin: CGPoint(x: targetFrame.origin.x + 10, y: targetFrame.origin.y + 10),
                 size: engine.getSize(window) ?? CGSize(width: 800, height: 600)
@@ -239,10 +326,10 @@ final class WindowManager {
         }
 
         let screenID: String
-        if let target = targetScreen {
-            screenID = screens.screenID(for: target)
-        } else if let pos = engine.getPosition(window) {
-            screenID = screens.screenID(for: pos)
+        if let targetScreen {
+            screenID = screens.screenID(for: targetScreen)
+        } else if let position = engine.getPosition(window) {
+            screenID = screens.screenID(for: position)
         } else {
             screenID = "unknown"
         }
@@ -250,14 +337,12 @@ final class WindowManager {
         let state = winState[windowID]!
         let newZone = getZoneKey(state: state, screenID: screenID)
 
-        // Update zone registry
         removeFromZone(windowID: windowID, zoneKey: oldZone)
         addToZone(windowID: windowID, zoneKey: newZone)
-        winState[windowID]!.currentZone = newZone
+        winState[windowID]?.currentZone = newZone
 
-        // Reapply peek offsets for affected zones
-        if let old = oldZone, old != newZone {
-            applyPeekOffsets(zoneKey: old)
+        if let oldZone, oldZone != newZone {
+            applyPeekOffsets(zoneKey: oldZone, shouldFocusFront: false)
         }
         applyPeekOffsets(zoneKey: newZone)
     }
@@ -267,26 +352,28 @@ final class WindowManager {
     func moveLeft() {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if state.hCentered {
             state.hCentered = false
-            state.hIdx = centerToEdgeLeft[state.hCenterIdx]!
+            state.hIdx = horizontalLayout.centerToLeading[state.hCenterIdx] ?? horizontalLayout.fullEdgeIndex
             winState[windowID] = state
             finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             return
         }
 
         if state.hIdx == 1 {
-            // At left extreme — overflow to west monitor or wrap
-            if let pos = engine.getPosition(window),
-               let target = screens.screenToWest(of: pos) {
-                state.hIdx = 7
+            if monitorOverflowEnabled,
+               let position = engine.getPosition(window),
+               let targetScreen = screens.screenToWest(of: position) {
+                state.hIdx = horizontalLayout.fullEdgeIndex + 1
                 winState[windowID] = state
-                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: targetScreen)
             } else {
-                state.hIdx = 5
+                state.hIdx = horizontalLayout.fullEdgeIndex - 1
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -300,26 +387,28 @@ final class WindowManager {
     func moveRight() {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if state.hCentered {
             state.hCentered = false
-            state.hIdx = centerToEdgeRight[state.hCenterIdx]!
+            state.hIdx = horizontalLayout.centerToTrailing[state.hCenterIdx] ?? horizontalLayout.fullEdgeIndex
             winState[windowID] = state
             finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             return
         }
 
-        if state.hIdx == 11 {
-            // At right extreme — overflow to east monitor or wrap
-            if let pos = engine.getPosition(window),
-               let target = screens.screenToEast(of: pos) {
-                state.hIdx = 5
+        if state.hIdx == horizontalLayout.maxEdgeIndex {
+            if monitorOverflowEnabled,
+               let position = engine.getPosition(window),
+               let targetScreen = screens.screenToEast(of: position) {
+                state.hIdx = horizontalLayout.fullEdgeIndex - 1
                 winState[windowID] = state
-                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: targetScreen)
             } else {
-                state.hIdx = 7
+                state.hIdx = horizontalLayout.fullEdgeIndex + 1
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -333,26 +422,28 @@ final class WindowManager {
     func moveUp() {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if state.vCentered {
             state.vCentered = false
-            state.vIdx = centerToEdgeUp[state.vCenterIdx]!
+            state.vIdx = verticalLayout.centerToLeading[state.vCenterIdx] ?? verticalLayout.fullEdgeIndex
             winState[windowID] = state
             finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             return
         }
 
         if state.vIdx == 1 {
-            // At top extreme — overflow to north monitor or wrap
-            if let pos = engine.getPosition(window),
-               let target = screens.screenToNorth(of: pos) {
-                state.vIdx = 7
+            if monitorOverflowEnabled,
+               let position = engine.getPosition(window),
+               let targetScreen = screens.screenToNorth(of: position) {
+                state.vIdx = verticalLayout.fullEdgeIndex + 1
                 winState[windowID] = state
-                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: targetScreen)
             } else {
-                state.vIdx = 5  // wrap
+                state.vIdx = verticalLayout.fullEdgeIndex - 1
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -366,26 +457,28 @@ final class WindowManager {
     func moveDown() {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if state.vCentered {
             state.vCentered = false
-            state.vIdx = centerToEdgeDown[state.vCenterIdx]!
+            state.vIdx = verticalLayout.centerToTrailing[state.vCenterIdx] ?? verticalLayout.fullEdgeIndex
             winState[windowID] = state
             finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             return
         }
 
-        if state.vIdx == 11 {
-            // At bottom extreme — overflow to south monitor or wrap
-            if let pos = engine.getPosition(window),
-               let target = screens.screenToSouth(of: pos) {
-                state.vIdx = 5
+        if state.vIdx == verticalLayout.maxEdgeIndex {
+            if monitorOverflowEnabled,
+               let position = engine.getPosition(window),
+               let targetScreen = screens.screenToSouth(of: position) {
+                state.vIdx = verticalLayout.fullEdgeIndex - 1
                 winState[windowID] = state
-                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: target)
+                finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: targetScreen)
             } else {
-                state.vIdx = 7  // wrap
+                state.vIdx = verticalLayout.fullEdgeIndex + 1
                 winState[windowID] = state
                 finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
             }
@@ -401,18 +494,20 @@ final class WindowManager {
     func centerH(direction: CenterDirection) {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if !state.hCentered {
             state.hCentered = true
-            state.hCenterIdx = edgeToCenterH[state.hIdx]!
+            state.hCenterIdx = horizontalLayout.edgeToCenter[state.hIdx] ?? 1
         } else {
             switch direction {
             case .shrink:
-                state.hCenterIdx = state.hCenterIdx == 6 ? 1 : state.hCenterIdx + 1
+                state.hCenterIdx = state.hCenterIdx == horizontalLayout.centerPositions.count ? 1 : state.hCenterIdx + 1
             case .grow:
-                state.hCenterIdx = state.hCenterIdx == 1 ? 6 : state.hCenterIdx - 1
+                state.hCenterIdx = state.hCenterIdx == 1 ? horizontalLayout.centerPositions.count : state.hCenterIdx - 1
             }
         }
 
@@ -423,18 +518,20 @@ final class WindowManager {
     func centerV(direction: CenterDirection) {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
         if !state.vCentered {
             state.vCentered = true
-            state.vCenterIdx = edgeToCenterV[state.vIdx]!
+            state.vCenterIdx = verticalLayout.edgeToCenter[state.vIdx] ?? 1
         } else {
             switch direction {
             case .shrink:
-                state.vCenterIdx = state.vCenterIdx == 6 ? 1 : state.vCenterIdx + 1
+                state.vCenterIdx = state.vCenterIdx == verticalLayout.centerPositions.count ? 1 : state.vCenterIdx + 1
             case .grow:
-                state.vCenterIdx = state.vCenterIdx == 1 ? 6 : state.vCenterIdx - 1
+                state.vCenterIdx = state.vCenterIdx == 1 ? verticalLayout.centerPositions.count : state.vCenterIdx - 1
             }
         }
 
@@ -447,13 +544,17 @@ final class WindowManager {
     func resetWindow() {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+        synchronizeZoneMembership(for: windowID, window: window)
+
         var state = getState(for: windowID)
         let oldZone = state.currentZone
 
-        state.hIdx = 6
-        state.vIdx = 6
+        state.hIdx = horizontalLayout.fullEdgeIndex
+        state.vIdx = verticalLayout.fullEdgeIndex
         state.hCentered = false
         state.vCentered = false
+        state.hCenterIdx = 1
+        state.vCenterIdx = 1
 
         winState[windowID] = state
         finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
@@ -464,25 +565,33 @@ final class WindowManager {
     func cycleZone(direction: CycleDirection) {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return }
+
+        synchronizeZoneMembership(for: windowID, window: window)
+
         guard let state = winState[windowID],
-              let zoneKey = state.currentZone,
-              var windows = zoneWindows[zoneKey],
-              windows.count > 1 else { return }
+              let zoneKey = state.currentZone else { return }
+
+        if let windowIDs = zoneWindows[zoneKey] {
+            for trackedWindowID in windowIDs where trackedWindowID != windowID {
+                if let trackedWindow = engine.windowElement(for: trackedWindowID) {
+                    synchronizeZoneMembership(for: trackedWindowID, window: trackedWindow)
+                }
+            }
+        }
+
+        guard var windows = zoneWindows[zoneKey], windows.count > 1 else { return }
 
         switch direction {
         case .forward:
-            // Move front to back
             let front = windows.removeFirst()
             windows.append(front)
         case .backward:
-            // Move back to front
             let back = windows.removeLast()
             windows.insert(back, at: 0)
         }
 
         zoneWindows[zoneKey] = windows
 
-        // Focus the new front window and reapply offsets
         if let frontWindow = engine.windowElement(for: windows[0]) {
             engine.focus(frontWindow)
         }
@@ -507,7 +616,7 @@ final class WindowManager {
         }
 
         for zoneKey in zonesToRefresh {
-            applyPeekOffsets(zoneKey: zoneKey)
+            applyPeekOffsets(zoneKey: zoneKey, shouldFocusFront: false)
         }
     }
 }
