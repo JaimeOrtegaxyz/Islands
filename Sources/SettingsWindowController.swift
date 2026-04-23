@@ -1,18 +1,22 @@
 import AppKit
 
+// MARK: - Controller
+
 final class SettingsWindowController: NSWindowController {
     private let settingsStore: SettingsStore
     private let accessibilityManager: AccessibilityManager
     private let launchAtLoginController: LaunchAtLoginController
 
-    private let baseModifierValueLabel = NSTextField(labelWithString: "")
-    private let reverseCyclePopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let centeredModePopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let snapProfilePopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let peekSizePopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let keyboardPreviewLabel = NSTextField(wrappingLabelWithString: "")
-    private let accessibilityStatusLabel = NSTextField(labelWithString: "")
-    private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch Islands at login", target: nil, action: nil)
+    private let baseRecorder = ModifierRecorderView()
+    private let reverseCyclePills = PillSelectorView()
+    private let centeredModePills = PillSelectorView()
+    private let snapProfilePills = PillSelectorView()
+    private let peekSizePills = PillSelectorView()
+    private let launchAtLoginCheckbox = StyledCheckbox(title: "Launch at login")
+    private let accessibilityStatusLabel = WhiteLabel()
+    private let accessibilityButton = OutlineButton(title: "Open Accessibility Settings")
+    private let restoreDefaultsButton = OutlineButton(title: "Restore Defaults")
+    private let previewLabel = WhiteLabel()
 
     init(
         settingsStore: SettingsStore,
@@ -24,14 +28,19 @@ final class SettingsWindowController: NSWindowController {
         self.launchAtLoginController = launchAtLoginController
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 760),
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Islands Settings"
-        window.center()
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .black
         window.isReleasedWhenClosed = false
+        window.center()
 
         super.init(window: window)
 
@@ -51,9 +60,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    required init?(coder: NSCoder) { fatalError() }
 
     func showWindowAndActivate() {
         guard let window else { return }
@@ -65,344 +72,248 @@ final class SettingsWindowController: NSWindowController {
 
     func refreshSystemState() {
         let trusted = accessibilityManager.isTrusted()
-        accessibilityStatusLabel.stringValue = trusted ? "Accessibility access is enabled." : "Accessibility access is still required."
-        launchAtLoginCheckbox.state = launchAtLoginController.isEnabled() ? .on : .off
+        accessibilityStatusLabel.stringValue = trusted ? "Accessibility access enabled" : "Accessibility access required"
+        accessibilityStatusLabel.alphaValue = trusted ? 0.7 : 1.0
+        launchAtLoginCheckbox.isChecked = launchAtLoginController.isEnabled()
     }
+
+    // MARK: Layout
 
     private func buildInterface() {
         guard let contentView = window?.contentView else { return }
+        contentView.wantsLayer = true
 
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        let background = BackgroundImageView()
+        background.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(background)
 
-        let documentView = NSView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.documentView = documentView
-        contentView.addSubview(scrollView)
-
-        NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-        ])
-
-        let container = NSStackView()
-        container.orientation = .vertical
-        container.alignment = .leading
-        container.spacing = 18
-        container.translatesAutoresizingMaskIntoConstraints = false
-        documentView.addSubview(container)
+        let tint = NSView()
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.08).cgColor
+        tint.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(tint)
 
         NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 24),
-            container.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -24),
-            container.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 24),
-            container.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24),
-            container.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor, constant: -48),
+            background.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            background.topAnchor.constraint(equalTo: contentView.topAnchor),
+            background.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            tint.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            tint.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            tint.topAnchor.constraint(equalTo: contentView.topAnchor),
+            tint.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
 
-        container.addArrangedSubview(makeKeyboardSection())
-        container.addArrangedSubview(makeLayoutSection())
-        container.addArrangedSubview(makeSystemSection())
-        container.addArrangedSubview(makeFooterSection())
-    }
+        let shortcutsColumn = makeShortcutsColumn()
+        let layoutColumn = makeLayoutColumn()
 
-    private func makeKeyboardSection() -> NSView {
-        let section = makeSection(title: "Keyboard")
+        let columns = NSStackView(views: [shortcutsColumn, layoutColumn])
+        columns.orientation = .horizontal
+        columns.alignment = .top
+        columns.distribution = .fillEqually
+        columns.spacing = 36
+        columns.translatesAutoresizingMaskIntoConstraints = false
 
-        let recordButton = NSButton(title: "Record…", target: self, action: #selector(recordBaseModifiers))
-        let baseRow = makeRow(label: "Base modifier combo", control: makeTrailingStack(views: [baseModifierValueLabel, recordButton]))
+        let systemRow = makeSystemRow()
+        let footer = makeFooter()
 
-        reverseCyclePopup.target = self
-        reverseCyclePopup.action = #selector(reverseCyclePopupChanged)
-        let reverseRow = makeRow(label: "Backward stack extra modifiers", control: reverseCyclePopup)
+        contentView.addSubview(columns)
+        contentView.addSubview(systemRow)
+        contentView.addSubview(footer)
 
-        centeredModePopup.target = self
-        centeredModePopup.action = #selector(centeredModePopupChanged)
-        let centeredRow = makeRow(label: "Centered mode extra modifiers", control: centeredModePopup)
-
-        keyboardPreviewLabel.textColor = .secondaryLabelColor
-
-        let body = section.subviews[1] as! NSStackView
-        body.addArrangedSubview(baseRow)
-        body.addArrangedSubview(reverseRow)
-        body.addArrangedSubview(centeredRow)
-        body.addArrangedSubview(keyboardPreviewLabel)
-        return section
-    }
-
-    private func makeLayoutSection() -> NSView {
-        let section = makeSection(title: "Layout")
-
-        snapProfilePopup.target = self
-        snapProfilePopup.action = #selector(snapProfilePopupChanged)
-
-        peekSizePopup.target = self
-        peekSizePopup.action = #selector(peekSizePopupChanged)
-
-        let snapRow = makeRow(label: "Snap sizes", control: snapProfilePopup)
-        let peekRow = makeRow(label: "Accordion peek size", control: peekSizePopup)
-
-        let noteLabel = NSTextField(wrappingLabelWithString: "Monitor overflow stays enabled by default.")
-        noteLabel.textColor = .secondaryLabelColor
-
-        let body = section.subviews[1] as! NSStackView
-        body.addArrangedSubview(snapRow)
-        body.addArrangedSubview(peekRow)
-        body.addArrangedSubview(noteLabel)
-        return section
-    }
-
-    private func makeSystemSection() -> NSView {
-        let section = makeSection(title: "System")
-
-        let accessibilityButton = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibilitySettings))
-        let accessibilityRow = makeRow(label: "Accessibility", control: makeTrailingStack(views: [accessibilityStatusLabel, accessibilityButton]))
-
-        launchAtLoginCheckbox.target = self
-        launchAtLoginCheckbox.action = #selector(toggleLaunchAtLogin)
-
-        let restoreDefaultsButton = NSButton(title: "Restore Defaults", target: self, action: #selector(restoreDefaults))
-        restoreDefaultsButton.bezelStyle = .rounded
-
-        let body = section.subviews[1] as! NSStackView
-        body.addArrangedSubview(accessibilityRow)
-        body.addArrangedSubview(launchAtLoginCheckbox)
-        body.addArrangedSubview(restoreDefaultsButton)
-        return section
-    }
-
-    private func makeFooterSection() -> NSView {
-        let footer = NSBox()
-        footer.boxType = .custom
-        footer.cornerRadius = 12
-        footer.borderColor = .separatorColor
-        footer.borderWidth = 1
-        footer.contentViewMargins = NSSize(width: 16, height: 16)
-
-        let logoSlot = NSBox()
-        logoSlot.boxType = .custom
-        logoSlot.cornerRadius = 10
-        logoSlot.borderColor = .separatorColor
-        logoSlot.borderWidth = 1
-        logoSlot.fillColor = NSColor.windowBackgroundColor
-        logoSlot.contentViewMargins = NSSize(width: 12, height: 12)
-        logoSlot.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            logoSlot.widthAnchor.constraint(equalToConstant: 64),
-            logoSlot.heightAnchor.constraint(equalToConstant: 64),
+            columns.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 72),
+            columns.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
+            columns.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
+
+            systemRow.topAnchor.constraint(equalTo: columns.bottomAnchor, constant: 28),
+            systemRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
+            systemRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
+
+            footer.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            footer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -34),
         ])
 
-        let logoImage = NSImageView()
-        logoImage.image = NSImage(systemSymbolName: "rectangle.split.2x2", accessibilityDescription: "Islands")
-        logoImage.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 26, weight: .medium)
-        logoImage.translatesAutoresizingMaskIntoConstraints = false
+        baseRecorder.onCommit = { [weak self] modifiers in
+            self?.settingsStore.setBaseModifiers(modifiers)
+        }
+        reverseCyclePills.onSelect = { [weak self] raw in
+            self?.settingsStore.setReverseCycleExtraModifiers(ModifierSet(rawValue: raw))
+        }
+        centeredModePills.onSelect = { [weak self] raw in
+            self?.settingsStore.setCenteredModeExtraModifiers(ModifierSet(rawValue: raw))
+        }
+        snapProfilePills.onSelect = { [weak self] raw in
+            if let profile = SnapProfile(rawValue: raw) {
+                self?.settingsStore.setSnapProfile(profile)
+            }
+        }
+        peekSizePills.onSelect = { [weak self] raw in
+            if let preset = PeekSizePreset(rawValue: raw) {
+                self?.settingsStore.setPeekSize(preset)
+            }
+        }
+        launchAtLoginCheckbox.onToggle = { [weak self] shouldEnable in
+            self?.applyLaunchAtLogin(shouldEnable)
+        }
+        accessibilityButton.onClick = { [weak self] in
+            self?.accessibilityManager.openSystemSettings()
+        }
+        restoreDefaultsButton.onClick = { [weak self] in
+            self?.restoreDefaults()
+        }
+    }
 
-        let logoContainer = NSView()
-        logoContainer.translatesAutoresizingMaskIntoConstraints = false
-        logoContainer.addSubview(logoImage)
-        NSLayoutConstraint.activate([
-            logoImage.centerXAnchor.constraint(equalTo: logoContainer.centerXAnchor),
-            logoImage.centerYAnchor.constraint(equalTo: logoContainer.centerYAnchor),
+    private func makeShortcutsColumn() -> NSView {
+        previewLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        previewLabel.alphaValue = 0.75
+        previewLabel.maximumNumberOfLines = 3
+
+        let column = NSStackView(views: [
+            sectionHeader("Shortcuts"),
+            fieldGroup(label: "Base combo", control: baseRecorder),
+            fieldGroup(label: "Backward stack adds", control: reverseCyclePills),
+            fieldGroup(label: "Centered mode adds", control: centeredModePills),
+            previewLabel,
         ])
-        logoSlot.contentView = logoContainer
-
-        let titleLabel = NSTextField(labelWithString: "Islands")
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-
-        let versionString = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let descriptionLabel = NSTextField(wrappingLabelWithString: "Native macOS window tiling with accordion stacking.")
-        descriptionLabel.textColor = .secondaryLabelColor
-
-        let versionLabel = NSTextField(labelWithString: "Version \(versionString)")
-        versionLabel.textColor = .secondaryLabelColor
-
-        let textStack = NSStackView(views: [titleLabel, descriptionLabel, versionLabel])
-        textStack.orientation = .vertical
-        textStack.alignment = .leading
-        textStack.spacing = 6
-
-        let layout = NSStackView(views: [logoSlot, textStack])
-        layout.orientation = .horizontal
-        layout.alignment = .centerY
-        layout.spacing = 14
-
-        footer.contentView = layout
-        return footer
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 18
+        column.setCustomSpacing(14, after: column.arrangedSubviews[0])
+        column.setCustomSpacing(20, after: column.arrangedSubviews[3])
+        return column
     }
 
-    private func makeSection(title: String) -> NSView {
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-
-        let body = NSStackView()
-        body.orientation = .vertical
-        body.alignment = .leading
-        body.spacing = 12
-
-        let section = NSStackView(views: [titleLabel, body])
-        section.orientation = .vertical
-        section.alignment = .leading
-        section.spacing = 10
-        return section
+    private func makeLayoutColumn() -> NSView {
+        let column = NSStackView(views: [
+            sectionHeader("Layout"),
+            fieldGroup(label: "Snap sizes", control: snapProfilePills),
+            fieldGroup(label: "Peek size", control: peekSizePills),
+        ])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 18
+        column.setCustomSpacing(14, after: column.arrangedSubviews[0])
+        return column
     }
 
-    private func makeRow(label: String, control: NSView) -> NSView {
-        let labelField = NSTextField(labelWithString: label)
-        labelField.font = .systemFont(ofSize: 13)
+    private func makeSystemRow() -> NSView {
+        let accessibilityStack = NSStackView(views: [accessibilityStatusLabel, accessibilityButton])
+        accessibilityStack.orientation = .horizontal
+        accessibilityStack.alignment = .centerY
+        accessibilityStack.spacing = 14
+        accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
 
-        let row = NSStackView(views: [labelField, NSView(), control])
+        let leftStack = NSStackView(views: [launchAtLoginCheckbox, accessibilityStack])
+        leftStack.orientation = .vertical
+        leftStack.alignment = .leading
+        leftStack.spacing = 12
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+
+        let row = NSStackView(views: [leftStack, spacer, restoreDefaultsButton])
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 12
-
-        control.setContentHuggingPriority(.required, for: .horizontal)
-        control.setContentCompressionResistancePriority(.required, for: .horizontal)
-
+        row.spacing = 20
+        row.translatesAutoresizingMaskIntoConstraints = false
         return row
     }
 
-    private func makeTrailingStack(views: [NSView]) -> NSStackView {
-        let stack = NSStackView(views: views)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
+    private func makeFooter() -> NSView {
+        let versionString = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+
+        let title = WhiteLabel()
+        title.stringValue = "Islands"
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.alignment = .center
+        title.alphaValue = 0.95
+
+        let tagline = WhiteLabel()
+        tagline.stringValue = "Native window tiling for macOS"
+        tagline.font = .systemFont(ofSize: 11, weight: .regular)
+        tagline.alignment = .center
+        tagline.alphaValue = 0.75
+
+        let version = WhiteLabel()
+        version.stringValue = "Version \(versionString)"
+        version.font = .systemFont(ofSize: 10, weight: .regular)
+        version.alignment = .center
+        version.alphaValue = 0.6
+
+        let stack = NSStackView(views: [title, tagline, version])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
+    }
+
+    private func sectionHeader(_ text: String) -> NSView {
+        let label = WhiteLabel()
+        label.stringValue = text.uppercased()
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+
+        let attributed = NSMutableAttributedString(string: text.uppercased(), attributes: [
+            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor.white,
+            .kern: 2.4,
+        ])
+        label.attributedStringValue = attributed
+        label.alphaValue = 0.85
+        return label
+    }
+
+    private func fieldGroup(label text: String, control: NSView) -> NSView {
+        let label = WhiteLabel()
+        label.stringValue = text
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.alphaValue = 0.9
+
+        let stack = NSStackView(views: [label, control])
+        stack.orientation = .vertical
+        stack.alignment = .leading
         stack.spacing = 8
         return stack
     }
 
+    // MARK: State
+
     private func refreshUI() {
         let settings = settingsStore.snapshot
-        baseModifierValueLabel.stringValue = settings.baseModifiers.symbolString
-        populateExtraPopup(reverseCyclePopup, options: ModifierSet.extraModifierOptions(excluding: settings.baseModifiers), selected: settings.reverseCycleExtraModifiers)
-        populateExtraPopup(centeredModePopup, options: ModifierSet.extraModifierOptions(excluding: settings.baseModifiers), selected: settings.centeredModeExtraModifiers)
-        populateSnapProfilePopup(selected: settings.snapProfile)
-        populatePeekSizePopup(selected: settings.peekSize)
-        keyboardPreviewLabel.stringValue = """
-        Move and resize: \(settings.baseModifiers.symbolString) + arrows / Return / Tab
-        Backward stack: \(settings.reverseCycleModifiers.symbolString) + Tab
-        Centered mode: \(settings.centeredModeModifiers.symbolString) + arrows
+        baseRecorder.setModifiers(settings.baseModifiers)
+
+        let extras = ModifierSet.extraModifierOptions(excluding: settings.baseModifiers)
+        let extraItems = extras.map { PillSelectorView.Item(rawValue: $0.rawValue, title: "+\($0.symbolString)") }
+        reverseCyclePills.configure(items: extraItems, selectedRawValue: settings.reverseCycleExtraModifiers.rawValue)
+        centeredModePills.configure(items: extraItems, selectedRawValue: settings.centeredModeExtraModifiers.rawValue)
+
+        snapProfilePills.configure(
+            items: SnapProfile.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
+            selectedRawValue: settings.snapProfile.rawValue
+        )
+        peekSizePills.configure(
+            items: PeekSizePreset.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
+            selectedRawValue: settings.peekSize.rawValue
+        )
+
+        previewLabel.stringValue = """
+        Move/resize  \(settings.baseModifiers.symbolString) + arrows / Return / Tab
+        Back stack   \(settings.reverseCycleModifiers.symbolString) + Tab
+        Centered     \(settings.centeredModeModifiers.symbolString) + arrows
         """
         refreshSystemState()
-    }
-
-    private func populateExtraPopup(_ popup: NSPopUpButton, options: [ModifierSet], selected: ModifierSet) {
-        popup.removeAllItems()
-        for option in options {
-            popup.addItem(withTitle: option.symbolString)
-            popup.lastItem?.representedObject = option.rawValue
-        }
-
-        if let selectedItem = popup.itemArray.first(where: { ($0.representedObject as? Int) == selected.rawValue }) {
-            popup.select(selectedItem)
-        } else {
-            popup.selectItem(at: 0)
-        }
-    }
-
-    private func populateSnapProfilePopup(selected: SnapProfile) {
-        snapProfilePopup.removeAllItems()
-        for profile in SnapProfile.allCases {
-            snapProfilePopup.addItem(withTitle: profile.displayName)
-            snapProfilePopup.lastItem?.representedObject = profile.rawValue
-            snapProfilePopup.lastItem?.tag = profile.rawValue
-        }
-        snapProfilePopup.selectItem(withTag: selected.rawValue)
-    }
-
-    private func populatePeekSizePopup(selected: PeekSizePreset) {
-        peekSizePopup.removeAllItems()
-        for preset in PeekSizePreset.allCases {
-            peekSizePopup.addItem(withTitle: preset.displayName)
-            peekSizePopup.lastItem?.representedObject = preset.rawValue
-            peekSizePopup.lastItem?.tag = preset.rawValue
-        }
-        peekSizePopup.selectItem(withTag: selected.rawValue)
     }
 
     @objc private func settingsDidChange() {
         refreshUI()
     }
 
-    @objc private func recordBaseModifiers() {
-        let current = settingsStore.snapshot.baseModifiers
-        let alert = NSAlert()
-        alert.messageText = "Record Base Modifiers"
-        alert.informativeText = "Press the modifiers you want to use, then click Save. Islands needs at least one modifier, and one modifier has to remain available for alternate modes."
-
-        let capturedLabel = NSTextField(labelWithString: current.symbolString)
-        capturedLabel.font = .monospacedSystemFont(ofSize: 18, weight: .medium)
-
-        let accessory = NSStackView(views: [capturedLabel])
-        accessory.orientation = .vertical
-        accessory.alignment = .leading
-        accessory.spacing = 8
-        alert.accessoryView = accessory
-
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        var capturedModifiers = current
-        let monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
-            let modifiers = ModifierSet(eventFlags: event.modifierFlags)
-            if !modifiers.isEmpty {
-                capturedModifiers = modifiers
-                capturedLabel.stringValue = modifiers.symbolString
-            }
-            return nil
-        }
-
-        let response = alert.runModal()
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-
-        guard response == .alertFirstButtonReturn else { return }
-        guard capturedModifiers.isValidBaseShortcut else {
-            presentErrorAlert(
-                title: "That shortcut won’t work",
-                message: "Use at least one modifier, and leave at least one extra modifier available for backward stack cycling and centered mode."
-            )
-            return
-        }
-
-        settingsStore.setBaseModifiers(capturedModifiers)
-    }
-
-    @objc private func reverseCyclePopupChanged() {
-        guard let rawValue = reverseCyclePopup.selectedItem?.representedObject as? Int else { return }
-        settingsStore.setReverseCycleExtraModifiers(ModifierSet(rawValue: rawValue))
-    }
-
-    @objc private func centeredModePopupChanged() {
-        guard let rawValue = centeredModePopup.selectedItem?.representedObject as? Int else { return }
-        settingsStore.setCenteredModeExtraModifiers(ModifierSet(rawValue: rawValue))
-    }
-
-    @objc private func snapProfilePopupChanged() {
-        guard let rawValue = snapProfilePopup.selectedItem?.representedObject as? Int,
-              let profile = SnapProfile(rawValue: rawValue) else { return }
-        settingsStore.setSnapProfile(profile)
-    }
-
-    @objc private func peekSizePopupChanged() {
-        guard let rawValue = peekSizePopup.selectedItem?.representedObject as? Int,
-              let preset = PeekSizePreset(rawValue: rawValue) else { return }
-        settingsStore.setPeekSize(preset)
-    }
-
-    @objc private func openAccessibilitySettings() {
-        accessibilityManager.openSystemSettings()
-    }
-
-    @objc private func toggleLaunchAtLogin() {
-        let shouldEnable = launchAtLoginCheckbox.state == .on
+    private func applyLaunchAtLogin(_ shouldEnable: Bool) {
         do {
             try launchAtLoginController.setEnabled(shouldEnable)
         } catch {
-            launchAtLoginCheckbox.state = launchAtLoginController.isEnabled() ? .on : .off
+            launchAtLoginCheckbox.isChecked = launchAtLoginController.isEnabled()
             presentErrorAlert(
                 title: "Couldn’t update launch at login",
                 message: error.localizedDescription
@@ -410,7 +321,7 @@ final class SettingsWindowController: NSWindowController {
         }
     }
 
-    @objc private func restoreDefaults() {
+    private func restoreDefaults() {
         settingsStore.restoreDefaults()
 
         if launchAtLoginController.isEnabled() {
@@ -433,5 +344,567 @@ final class SettingsWindowController: NSWindowController {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.beginSheetModal(for: window!)
+    }
+}
+
+// MARK: - Background image
+
+private final class BackgroundImageView: NSView {
+    override var wantsDefaultClipping: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.contentsGravity = .resizeAspectFill
+        layer?.masksToBounds = true
+        loadImage()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func loadImage() {
+        let url = Bundle.main.url(forResource: "settings-bg", withExtension: "webp")
+            ?? URL(fileURLWithPath: "settings-bg.webp")
+        if let image = NSImage(contentsOf: url) {
+            layer?.contents = image
+        }
+    }
+}
+
+// MARK: - White label
+
+private final class WhiteLabel: NSTextField {
+    init() {
+        super.init(frame: .zero)
+        isEditable = false
+        isBezeled = false
+        drawsBackground = false
+        isSelectable = false
+        textColor = .white
+        backgroundColor = .clear
+        cell?.wraps = true
+        cell?.isScrollable = false
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var allowsVibrancy: Bool { false }
+}
+
+// MARK: - Outline button
+
+private final class OutlineButton: NSView {
+    var onClick: (() -> Void)?
+
+    private let titleLabel = WhiteLabel()
+    private var isHovered = false
+    private var isPressed = false
+    private var trackingArea: NSTrackingArea?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        titleLabel.stringValue = title
+        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.alignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        NSLayoutConstraint.activate([
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            heightAnchor.constraint(equalToConstant: 30),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAppearance()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        isPressed = false
+        updateAppearance()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        isPressed = true
+        updateAppearance()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let wasPressed = isPressed
+        isPressed = false
+        updateAppearance()
+        if wasPressed && bounds.contains(convert(event.locationInWindow, from: nil)) {
+            onClick?()
+        }
+    }
+
+    private func updateAppearance() {
+        let fillAlpha: CGFloat = isPressed ? 0.22 : (isHovered ? 0.12 : 0.0)
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(fillAlpha).cgColor
+    }
+}
+
+// MARK: - Checkbox
+
+private final class StyledCheckbox: NSView {
+    var onToggle: ((Bool) -> Void)?
+    var isChecked: Bool = false {
+        didSet { updateAppearance() }
+    }
+
+    private let box = NSView()
+    private let check = NSView()
+    private let titleLabel = WhiteLabel()
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false
+
+    init(title: String) {
+        super.init(frame: .zero)
+
+        box.wantsLayer = true
+        box.layer?.cornerRadius = 4
+        box.layer?.borderWidth = 1.2
+        box.layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        box.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(box)
+
+        check.wantsLayer = true
+        check.layer?.cornerRadius = 2
+        check.layer?.backgroundColor = NSColor.white.cgColor
+        check.translatesAutoresizingMaskIntoConstraints = false
+        check.alphaValue = 0
+        box.addSubview(check)
+
+        titleLabel.stringValue = title
+        titleLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        titleLabel.alphaValue = 0.9
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        NSLayoutConstraint.activate([
+            box.leadingAnchor.constraint(equalTo: leadingAnchor),
+            box.centerYAnchor.constraint(equalTo: centerYAnchor),
+            box.widthAnchor.constraint(equalToConstant: 16),
+            box.heightAnchor.constraint(equalToConstant: 16),
+            check.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+            check.centerYAnchor.constraint(equalTo: box.centerYAnchor),
+            check.widthAnchor.constraint(equalToConstant: 8),
+            check.heightAnchor.constraint(equalToConstant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: box.trailingAnchor, constant: 10),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+            heightAnchor.constraint(equalToConstant: 22),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAppearance()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAppearance()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        isChecked.toggle()
+        onToggle?(isChecked)
+    }
+
+    private func updateAppearance() {
+        check.alphaValue = isChecked ? 1 : 0
+        let borderAlpha: CGFloat = isHovered ? 1.0 : 0.85
+        box.layer?.borderColor = NSColor.white.withAlphaComponent(borderAlpha).cgColor
+    }
+}
+
+// MARK: - Modifier recorder
+
+private final class ModifierRecorderView: NSView {
+    var onCommit: ((ModifierSet) -> Void)?
+
+    private let displayLabel = WhiteLabel()
+    private let hintLabel = WhiteLabel()
+    private let cancelButton = CancelGlyphView()
+    private var flagsMonitor: Any?
+    private var keyMonitor: Any?
+    private var committedModifiers: ModifierSet = []
+    private var pendingModifiers: ModifierSet = []
+    private var isRecording = false
+    private var isHovered = false
+    private var trackingArea: NSTrackingArea?
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.borderWidth = 1.2
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        displayLabel.font = .monospacedSystemFont(ofSize: 20, weight: .medium)
+        displayLabel.alignment = .left
+        displayLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(displayLabel)
+
+        hintLabel.stringValue = "Press modifier keys…"
+        hintLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        hintLabel.alphaValue = 0
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hintLabel)
+
+        cancelButton.alphaValue = 0
+        cancelButton.onClick = { [weak self] in self?.stopRecording(commit: false) }
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(cancelButton)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 44),
+            widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
+            displayLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            displayLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            displayLabel.trailingAnchor.constraint(lessThanOrEqualTo: cancelButton.leadingAnchor, constant: -8),
+            hintLabel.leadingAnchor.constraint(equalTo: displayLabel.trailingAnchor, constant: 10),
+            hintLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            hintLabel.trailingAnchor.constraint(lessThanOrEqualTo: cancelButton.leadingAnchor, constant: -8),
+            cancelButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            cancelButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            cancelButton.widthAnchor.constraint(equalToConstant: 18),
+            cancelButton.heightAnchor.constraint(equalToConstant: 18),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    deinit {
+        removeMonitors()
+    }
+
+    func setModifiers(_ modifiers: ModifierSet) {
+        committedModifiers = modifiers
+        if !isRecording {
+            displayLabel.stringValue = modifiers.symbolString
+        }
+    }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAppearance()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAppearance()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if isRecording {
+            // Tapping while recording does nothing (use X to cancel).
+            return
+        }
+        startRecording()
+    }
+
+    private func startRecording() {
+        isRecording = true
+        pendingModifiers = []
+        displayLabel.stringValue = ""
+        updateAppearance()
+
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+            self?.handleFlagsChanged(event)
+            return event
+        }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard let self else { return event }
+            if event.keyCode == 53 { // Escape
+                self.stopRecording(commit: false)
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func stopRecording(commit: Bool) {
+        isRecording = false
+        removeMonitors()
+        if commit, pendingModifiers.isValidBaseShortcut {
+            committedModifiers = pendingModifiers
+            onCommit?(pendingModifiers)
+        }
+        pendingModifiers = []
+        displayLabel.stringValue = committedModifiers.symbolString
+        updateAppearance()
+    }
+
+    private func removeMonitors() {
+        if let m = flagsMonitor { NSEvent.removeMonitor(m) }
+        if let m = keyMonitor { NSEvent.removeMonitor(m) }
+        flagsMonitor = nil
+        keyMonitor = nil
+    }
+
+    private func handleFlagsChanged(_ event: NSEvent) {
+        guard isRecording else { return }
+        let current = ModifierSet(eventFlags: event.modifierFlags)
+
+        if current.isEmpty {
+            // All keys released — commit what we captured at peak.
+            stopRecording(commit: pendingModifiers.isValidBaseShortcut)
+            return
+        }
+
+        // Track the peak combo pressed so multi-key combos register reliably.
+        pendingModifiers.formUnion(current)
+        displayLabel.stringValue = pendingModifiers.symbolString
+    }
+
+    private func updateAppearance() {
+        let accent = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.4, alpha: 1.0)
+        if isRecording {
+            layer?.borderColor = accent.cgColor
+            layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+            hintLabel.animator().alphaValue = pendingModifiers.isEmpty ? 0.75 : 0
+            cancelButton.animator().alphaValue = 1
+            displayLabel.textColor = accent
+        } else {
+            let borderAlpha: CGFloat = isHovered ? 1.0 : 0.85
+            layer?.borderColor = NSColor.white.withAlphaComponent(borderAlpha).cgColor
+            layer?.backgroundColor = isHovered ? NSColor.white.withAlphaComponent(0.08).cgColor : NSColor.clear.cgColor
+            hintLabel.animator().alphaValue = 0
+            cancelButton.animator().alphaValue = 0
+            displayLabel.textColor = .white
+        }
+    }
+}
+
+// MARK: - Cancel glyph
+
+private final class CancelGlyphView: NSView {
+    var onClick: (() -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath()
+        let inset: CGFloat = 5
+        path.move(to: NSPoint(x: inset, y: inset))
+        path.line(to: NSPoint(x: bounds.width - inset, y: bounds.height - inset))
+        path.move(to: NSPoint(x: inset, y: bounds.height - inset))
+        path.line(to: NSPoint(x: bounds.width - inset, y: inset))
+        path.lineWidth = 1.3
+        path.lineCapStyle = .round
+        NSColor.white.withAlphaComponent(0.9).setStroke()
+        path.stroke()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onClick?()
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+// MARK: - Pill selector
+
+private final class PillSelectorView: NSView {
+    struct Item {
+        let rawValue: Int
+        let title: String
+    }
+
+    var onSelect: ((Int) -> Void)?
+
+    private var items: [Item] = []
+    private var selectedRawValue: Int?
+    private var pills: [PillButton] = []
+    private let stack = NSStackView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            heightAnchor.constraint(equalToConstant: 28),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(items: [Item], selectedRawValue: Int) {
+        self.items = items
+        self.selectedRawValue = selectedRawValue
+
+        for pill in pills {
+            stack.removeArrangedSubview(pill)
+            pill.removeFromSuperview()
+        }
+        pills = items.map { item in
+            let pill = PillButton(title: item.title)
+            pill.onClick = { [weak self] in
+                self?.selectedRawValue = item.rawValue
+                self?.updateSelection()
+                self?.onSelect?(item.rawValue)
+            }
+            return pill
+        }
+        for pill in pills { stack.addArrangedSubview(pill) }
+        updateSelection()
+    }
+
+    private func updateSelection() {
+        for (pill, item) in zip(pills, items) {
+            pill.isSelected = (item.rawValue == selectedRawValue)
+        }
+    }
+}
+
+private final class PillButton: NSView {
+    var onClick: (() -> Void)?
+    var isSelected: Bool = false {
+        didSet { updateAppearance() }
+    }
+
+    private let titleLabel = WhiteLabel()
+    private var isHovered = false
+    private var trackingArea: NSTrackingArea?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 14
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.75).cgColor
+
+        titleLabel.stringValue = title
+        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.alignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        NSLayoutConstraint.activate([
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            heightAnchor.constraint(equalToConstant: 28),
+        ])
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAppearance()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAppearance()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onClick?()
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    private func updateAppearance() {
+        if isSelected {
+            layer?.backgroundColor = NSColor.white.cgColor
+            layer?.borderColor = NSColor.white.cgColor
+            titleLabel.textColor = NSColor.black.withAlphaComponent(0.82)
+        } else {
+            let fill: CGFloat = isHovered ? 0.12 : 0
+            layer?.backgroundColor = NSColor.white.withAlphaComponent(fill).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(isHovered ? 1.0 : 0.75).cgColor
+            titleLabel.textColor = .white
+        }
     }
 }

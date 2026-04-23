@@ -10,6 +10,8 @@
     <string>Islands</string>
     <key>CFBundleExecutable</key>
     <string>Islands</string>
+    <key>CFBundleIconFile</key>
+    <string>Islands</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>
