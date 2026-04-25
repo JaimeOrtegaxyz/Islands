@@ -304,7 +304,7 @@ final class SettingsStore {
         baseModifiers: [.command, .option],
         reverseCycleExtraModifiers: [.shift],
         centeredModeExtraModifiers: [.control],
-        snapProfile: .both,
+        snapProfile: .sixths,
         peekSize: .medium
     )
 
