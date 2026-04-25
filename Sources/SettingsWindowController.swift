@@ -1012,7 +1012,7 @@ private final class SnapPreviewView: NSView {
         let menuBarAlpha: CGFloat = 0.55
         let menuBarHeight: CGFloat = 7
         let cornerRadius: CGFloat = 6
-        let cellAlpha: CGFloat = 0.25
+        let cellAlpha: CGFloat = 0.5
         let gap: CGFloat = 1.0
 
         let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
