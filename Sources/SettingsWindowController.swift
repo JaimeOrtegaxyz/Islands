@@ -10,13 +10,14 @@ final class SettingsWindowController: NSWindowController {
     private let baseRecorder = ModifierRecorderView()
     private let reverseCyclePills = PillSelectorView()
     private let centeredModePills = PillSelectorView()
-    private let snapProfilePills = PillSelectorView()
+    private let snapSizeSelector = SnapSizeSelector()
     private let peekSizePills = PillSelectorView()
     private let launchAtLoginCheckbox = StyledCheckbox(title: "Launch at login")
     private let accessibilityStatusLabel = WhiteLabel()
-    private let accessibilityButton = OutlineButton(title: "Open Accessibility Settings")
+    private let accessibilityButton = OutlineButton(title: "Open")
     private let restoreDefaultsButton = OutlineButton(title: "Restore Defaults")
     private let previewLabel = WhiteLabel()
+    private let accessibilityRow = NSStackView()
 
     init(
         settingsStore: SettingsStore,
@@ -72,8 +73,8 @@ final class SettingsWindowController: NSWindowController {
 
     func refreshSystemState() {
         let trusted = accessibilityManager.isTrusted()
-        accessibilityStatusLabel.stringValue = trusted ? "Accessibility access enabled" : "Accessibility access required"
-        accessibilityStatusLabel.alphaValue = trusted ? 0.7 : 1.0
+        accessibilityStatusLabel.stringValue = "Accessibility access required"
+        accessibilityRow.isHidden = trusted
         launchAtLoginCheckbox.isChecked = launchAtLoginController.isEnabled()
     }
 
@@ -114,21 +115,15 @@ final class SettingsWindowController: NSWindowController {
         columns.spacing = 36
         columns.translatesAutoresizingMaskIntoConstraints = false
 
-        let systemRow = makeSystemRow()
         let footer = makeFooter()
 
         contentView.addSubview(columns)
-        contentView.addSubview(systemRow)
         contentView.addSubview(footer)
 
         NSLayoutConstraint.activate([
             columns.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 72),
             columns.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
             columns.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
-
-            systemRow.topAnchor.constraint(equalTo: columns.bottomAnchor, constant: 28),
-            systemRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
-            systemRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
 
             footer.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             footer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -34),
@@ -143,10 +138,8 @@ final class SettingsWindowController: NSWindowController {
         centeredModePills.onSelect = { [weak self] raw in
             self?.settingsStore.setCenteredModeExtraModifiers(ModifierSet(rawValue: raw))
         }
-        snapProfilePills.onSelect = { [weak self] raw in
-            if let profile = SnapProfile(rawValue: raw) {
-                self?.settingsStore.setSnapProfile(profile)
-            }
+        snapSizeSelector.onChange = { [weak self] profile in
+            self?.settingsStore.setSnapProfile(profile)
         }
         peekSizePills.onSelect = { [weak self] raw in
             if let preset = PeekSizePreset(rawValue: raw) {
@@ -185,39 +178,53 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func makeLayoutColumn() -> NSView {
+        let snapGroup = fieldGroup(label: "Snap sizes", control: snapSizeSelector)
+        let peekGroup = fieldGroup(label: "Peek size", control: peekSizePills)
+
+        accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        accessibilityStatusLabel.alphaValue = 0.9
+
+        accessibilityRow.orientation = .horizontal
+        accessibilityRow.alignment = .centerY
+        accessibilityRow.spacing = 12
+        accessibilityRow.addArrangedSubview(accessibilityStatusLabel)
+        accessibilityRow.addArrangedSubview(accessibilityButton)
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+
+        let bottomRow = NSStackView(views: [launchAtLoginCheckbox, spacer, restoreDefaultsButton])
+        bottomRow.orientation = .horizontal
+        bottomRow.alignment = .centerY
+        bottomRow.spacing = 20
+
         let column = NSStackView(views: [
             sectionHeader("Layout"),
-            fieldGroup(label: "Snap sizes", control: snapProfilePills),
-            fieldGroup(label: "Peek size", control: peekSizePills),
+            snapGroup,
+            peekGroup,
+            sectionHeader("System"),
+            accessibilityRow,
+            bottomRow,
         ])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 18
         column.setCustomSpacing(14, after: column.arrangedSubviews[0])
+        column.setCustomSpacing(26, after: peekGroup)
+        column.setCustomSpacing(14, after: column.arrangedSubviews[3])
+        column.setCustomSpacing(12, after: accessibilityRow)
+
+        // Stretch the bottom row to the column's full width so the Restore Defaults
+        // button sits flush with the trailing edge.
+        bottomRow.translatesAutoresizingMaskIntoConstraints = false
+        accessibilityRow.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            bottomRow.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            bottomRow.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            accessibilityRow.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            accessibilityRow.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+        ])
         return column
-    }
-
-    private func makeSystemRow() -> NSView {
-        let accessibilityStack = NSStackView(views: [accessibilityStatusLabel, accessibilityButton])
-        accessibilityStack.orientation = .horizontal
-        accessibilityStack.alignment = .centerY
-        accessibilityStack.spacing = 14
-        accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
-
-        let leftStack = NSStackView(views: [launchAtLoginCheckbox, accessibilityStack])
-        leftStack.orientation = .vertical
-        leftStack.alignment = .leading
-        leftStack.spacing = 12
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-
-        let row = NSStackView(views: [leftStack, spacer, restoreDefaultsButton])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 20
-        row.translatesAutoresizingMaskIntoConstraints = false
-        return row
     }
 
     private func makeFooter() -> NSView {
@@ -288,10 +295,7 @@ final class SettingsWindowController: NSWindowController {
         reverseCyclePills.configure(items: extraItems, selectedRawValue: settings.reverseCycleExtraModifiers.rawValue)
         centeredModePills.configure(items: extraItems, selectedRawValue: settings.centeredModeExtraModifiers.rawValue)
 
-        snapProfilePills.configure(
-            items: SnapProfile.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
-            selectedRawValue: settings.snapProfile.rawValue
-        )
+        snapSizeSelector.setProfile(settings.snapProfile)
         peekSizePills.configure(
             items: PeekSizePreset.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
             selectedRawValue: settings.peekSize.rawValue
@@ -585,12 +589,13 @@ private final class ModifierRecorderView: NSView {
         layer?.backgroundColor = NSColor.clear.cgColor
 
         displayLabel.font = .monospacedSystemFont(ofSize: 20, weight: .medium)
-        displayLabel.alignment = .left
+        displayLabel.alignment = .center
         displayLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(displayLabel)
 
-        hintLabel.stringValue = "Press modifier keys…"
+        hintLabel.stringValue = "Press keys…"
         hintLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        hintLabel.alignment = .center
         hintLabel.alphaValue = 0
         hintLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hintLabel)
@@ -602,17 +607,15 @@ private final class ModifierRecorderView: NSView {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 44),
-            widthAnchor.constraint(greaterThanOrEqualToConstant: 160),
-            displayLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            widthAnchor.constraint(equalToConstant: 124),
+            displayLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             displayLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            displayLabel.trailingAnchor.constraint(lessThanOrEqualTo: cancelButton.leadingAnchor, constant: -8),
-            hintLabel.leadingAnchor.constraint(equalTo: displayLabel.trailingAnchor, constant: 10),
+            hintLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             hintLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            hintLabel.trailingAnchor.constraint(lessThanOrEqualTo: cancelButton.leadingAnchor, constant: -8),
-            cancelButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            cancelButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cancelButton.widthAnchor.constraint(equalToConstant: 18),
-            cancelButton.heightAnchor.constraint(equalToConstant: 18),
+            cancelButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            cancelButton.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            cancelButton.widthAnchor.constraint(equalToConstant: 14),
+            cancelButton.heightAnchor.constraint(equalToConstant: 14),
         ])
     }
 
@@ -712,6 +715,7 @@ private final class ModifierRecorderView: NSView {
         // Track the peak combo pressed so multi-key combos register reliably.
         pendingModifiers.formUnion(current)
         displayLabel.stringValue = pendingModifiers.symbolString
+        updateAppearance()
     }
 
     private func updateAppearance() {
@@ -905,6 +909,150 @@ private final class PillButton: NSView {
             layer?.backgroundColor = NSColor.white.withAlphaComponent(fill).cgColor
             layer?.borderColor = NSColor.white.withAlphaComponent(isHovered ? 1.0 : 0.75).cgColor
             titleLabel.textColor = .white
+        }
+    }
+}
+
+// MARK: - Snap size selector
+
+private final class SnapSizeSelector: NSView {
+    var onChange: ((SnapProfile) -> Void)?
+
+    private let preview = SnapPreviewView()
+    private let quartersPill = PillButton(title: "Quarters")
+    private let thirdsPill = PillButton(title: "Thirds")
+
+    private var quartersOn = true
+    private var thirdsOn = true
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+
+        preview.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(preview)
+
+        let pillRow = NSStackView(views: [quartersPill, thirdsPill])
+        pillRow.orientation = .horizontal
+        pillRow.alignment = .centerY
+        pillRow.spacing = 6
+        pillRow.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(pillRow)
+
+        NSLayoutConstraint.activate([
+            preview.leadingAnchor.constraint(equalTo: leadingAnchor),
+            preview.topAnchor.constraint(equalTo: topAnchor),
+            preview.widthAnchor.constraint(equalToConstant: 140),
+            preview.heightAnchor.constraint(equalToConstant: 78),
+            pillRow.leadingAnchor.constraint(equalTo: leadingAnchor),
+            pillRow.topAnchor.constraint(equalTo: preview.bottomAnchor, constant: 10),
+            pillRow.bottomAnchor.constraint(equalTo: bottomAnchor),
+            trailingAnchor.constraint(greaterThanOrEqualTo: preview.trailingAnchor),
+            trailingAnchor.constraint(greaterThanOrEqualTo: pillRow.trailingAnchor),
+        ])
+
+        quartersPill.onClick = { [weak self] in self?.toggle(quarters: true) }
+        thirdsPill.onClick = { [weak self] in self?.toggle(quarters: false) }
+        applyState()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setProfile(_ profile: SnapProfile) {
+        switch profile {
+        case .quarters: quartersOn = true; thirdsOn = false
+        case .thirds:   quartersOn = false; thirdsOn = true
+        case .both:     quartersOn = true; thirdsOn = true
+        }
+        applyState()
+    }
+
+    private func toggle(quarters: Bool) {
+        if quarters {
+            // Don't allow turning off the only-selected pill.
+            if quartersOn && !thirdsOn { return }
+            quartersOn.toggle()
+        } else {
+            if thirdsOn && !quartersOn { return }
+            thirdsOn.toggle()
+        }
+        applyState()
+        onChange?(currentProfile)
+    }
+
+    private var currentProfile: SnapProfile {
+        switch (quartersOn, thirdsOn) {
+        case (true, true):   return .both
+        case (true, false):  return .quarters
+        case (false, true):  return .thirds
+        case (false, false): return .quarters // unreachable; safety fallback
+        }
+    }
+
+    private func applyState() {
+        quartersPill.isSelected = quartersOn
+        thirdsPill.isSelected = thirdsOn
+        preview.quartersEnabled = quartersOn
+        preview.thirdsEnabled = thirdsOn
+    }
+}
+
+private final class SnapPreviewView: NSView {
+    var quartersEnabled: Bool = false { didSet { needsDisplay = true } }
+    var thirdsEnabled: Bool = false { didSet { needsDisplay = true } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let outlineAlpha: CGFloat = 0.85
+        let dividerAlpha: CGFloat = 0.95
+        let menuBarAlpha: CGFloat = 0.55
+        let menuBarHeight: CGFloat = 7
+        let cornerRadius: CGFloat = 6
+
+        let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
+
+        // Outer rectangle (the "desktop").
+        let outline = NSBezierPath(roundedRect: frame, xRadius: cornerRadius, yRadius: cornerRadius)
+        outline.lineWidth = 1.2
+        NSColor.white.withAlphaComponent(outlineAlpha).setStroke()
+        outline.stroke()
+
+        // Menubar separator near the top.
+        let menuY = frame.maxY - menuBarHeight
+        let menuBar = NSBezierPath()
+        menuBar.move(to: NSPoint(x: frame.minX + 1, y: menuY))
+        menuBar.line(to: NSPoint(x: frame.maxX - 1, y: menuY))
+        menuBar.lineWidth = 0.8
+        NSColor.white.withAlphaComponent(menuBarAlpha).setStroke()
+        menuBar.stroke()
+
+        // Vertical dividers extend from below the menubar to the bottom of the frame.
+        let dividerTop = menuY - 0.5
+        let dividerBottom = frame.minY + 1.5
+        let drawDivider: (CGFloat) -> Void = { x in
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: x, y: dividerTop))
+            line.line(to: NSPoint(x: x, y: dividerBottom))
+            line.lineWidth = 1.0
+            NSColor.white.withAlphaComponent(dividerAlpha).setStroke()
+            line.stroke()
+        }
+
+        let usableWidth = frame.width
+        if quartersEnabled {
+            for fraction in [0.25, 0.5, 0.75] {
+                drawDivider(frame.minX + usableWidth * CGFloat(fraction))
+            }
+        }
+        if thirdsEnabled {
+            for fraction in [1.0 / 3.0, 2.0 / 3.0] {
+                drawDivider(frame.minX + usableWidth * CGFloat(fraction))
+            }
         }
     }
 }

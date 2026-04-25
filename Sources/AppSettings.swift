@@ -301,9 +301,9 @@ final class SettingsStore {
     }
 
     private static let defaultSnapshot = AppSettingsSnapshot(
-        baseModifiers: [.control, .option],
+        baseModifiers: [.command, .option],
         reverseCycleExtraModifiers: [.shift],
-        centeredModeExtraModifiers: [.command],
+        centeredModeExtraModifiers: [.control],
         snapProfile: .both,
         peekSize: .medium
     )
