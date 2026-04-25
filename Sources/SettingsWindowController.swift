@@ -1012,7 +1012,7 @@ private final class SnapPreviewView: NSView {
         let menuBarAlpha: CGFloat = 0.55
         let menuBarHeight: CGFloat = 7
         let cornerRadius: CGFloat = 6
-        let cellAlpha: CGFloat = 0.13
+        let cellAlpha: CGFloat = 0.18
         let gap: CGFloat = 1.5
 
         let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
@@ -1041,25 +1041,37 @@ private final class SnapPreviewView: NSView {
             height: menuY - frame.minY - 3
         )
 
+        var activeCellPaths: [NSBezierPath] = []
         if quartersEnabled {
-            drawCellGrid(in: workingRect, columns: 4, rows: 4, gap: gap, alpha: cellAlpha)
+            activeCellPaths.append(cellsPath(in: workingRect, columns: 4, rows: 4, gap: gap))
         }
         if sixthsEnabled {
-            drawCellGrid(in: workingRect, columns: 6, rows: 6, gap: gap, alpha: cellAlpha)
+            activeCellPaths.append(cellsPath(in: workingRect, columns: 6, rows: 6, gap: gap))
         }
+        guard !activeCellPaths.isEmpty else { return }
+
+        // Intersect every active grid's cell mask so any divider from any grid
+        // stays transparent. Fill once per active grid so layering still adds a
+        // subtle density bump.
+        NSGraphicsContext.saveGraphicsState()
+        for path in activeCellPaths { path.addClip() }
+        NSColor.white.withAlphaComponent(cellAlpha).setFill()
+        let fill = NSBezierPath(rect: workingRect)
+        for _ in activeCellPaths { fill.fill() }
+        NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawCellGrid(in rect: NSRect, columns: Int, rows: Int, gap: CGFloat, alpha: CGFloat) {
+    private func cellsPath(in rect: NSRect, columns: Int, rows: Int, gap: CGFloat) -> NSBezierPath {
         let cellW = (rect.width - gap * CGFloat(columns - 1)) / CGFloat(columns)
         let cellH = (rect.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
-        NSColor.white.withAlphaComponent(alpha).setFill()
+        let path = NSBezierPath()
         for col in 0..<columns {
             for row in 0..<rows {
                 let x = rect.minX + (cellW + gap) * CGFloat(col)
                 let y = rect.minY + (cellH + gap) * CGFloat(row)
-                let cell = NSRect(x: x, y: y, width: cellW, height: cellH)
-                NSBezierPath(roundedRect: cell, xRadius: 1, yRadius: 1).fill()
+                path.append(NSBezierPath(rect: NSRect(x: x, y: y, width: cellW, height: cellH)))
             }
         }
+        return path
     }
 }
