@@ -920,10 +920,10 @@ private final class SnapSizeSelector: NSView {
 
     private let preview = SnapPreviewView()
     private let quartersPill = PillButton(title: "Quarters")
-    private let thirdsPill = PillButton(title: "Thirds")
+    private let sixthsPill = PillButton(title: "Sixths")
 
     private var quartersOn = true
-    private var thirdsOn = true
+    private var sixthsOn = true
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -931,7 +931,7 @@ private final class SnapSizeSelector: NSView {
         preview.translatesAutoresizingMaskIntoConstraints = false
         addSubview(preview)
 
-        let pillRow = NSStackView(views: [quartersPill, thirdsPill])
+        let pillRow = NSStackView(views: [quartersPill, sixthsPill])
         pillRow.orientation = .horizontal
         pillRow.alignment = .centerY
         pillRow.spacing = 6
@@ -951,7 +951,7 @@ private final class SnapSizeSelector: NSView {
         ])
 
         quartersPill.onClick = { [weak self] in self?.toggle(quarters: true) }
-        thirdsPill.onClick = { [weak self] in self?.toggle(quarters: false) }
+        sixthsPill.onClick = { [weak self] in self?.toggle(quarters: false) }
         applyState()
     }
 
@@ -959,9 +959,9 @@ private final class SnapSizeSelector: NSView {
 
     func setProfile(_ profile: SnapProfile) {
         switch profile {
-        case .quarters: quartersOn = true; thirdsOn = false
-        case .thirds:   quartersOn = false; thirdsOn = true
-        case .both:     quartersOn = true; thirdsOn = true
+        case .quarters: quartersOn = true; sixthsOn = false
+        case .sixths:   quartersOn = false; sixthsOn = true
+        case .both:     quartersOn = true; sixthsOn = true
         }
         applyState()
     }
@@ -969,36 +969,36 @@ private final class SnapSizeSelector: NSView {
     private func toggle(quarters: Bool) {
         if quarters {
             // Don't allow turning off the only-selected pill.
-            if quartersOn && !thirdsOn { return }
+            if quartersOn && !sixthsOn { return }
             quartersOn.toggle()
         } else {
-            if thirdsOn && !quartersOn { return }
-            thirdsOn.toggle()
+            if sixthsOn && !quartersOn { return }
+            sixthsOn.toggle()
         }
         applyState()
         onChange?(currentProfile)
     }
 
     private var currentProfile: SnapProfile {
-        switch (quartersOn, thirdsOn) {
+        switch (quartersOn, sixthsOn) {
         case (true, true):   return .both
         case (true, false):  return .quarters
-        case (false, true):  return .thirds
+        case (false, true):  return .sixths
         case (false, false): return .quarters // unreachable; safety fallback
         }
     }
 
     private func applyState() {
         quartersPill.isSelected = quartersOn
-        thirdsPill.isSelected = thirdsOn
+        sixthsPill.isSelected = sixthsOn
         preview.quartersEnabled = quartersOn
-        preview.thirdsEnabled = thirdsOn
+        preview.sixthsEnabled = sixthsOn
     }
 }
 
 private final class SnapPreviewView: NSView {
     var quartersEnabled: Bool = false { didSet { needsDisplay = true } }
-    var thirdsEnabled: Bool = false { didSet { needsDisplay = true } }
+    var sixthsEnabled: Bool = false { didSet { needsDisplay = true } }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1031,27 +1031,46 @@ private final class SnapPreviewView: NSView {
         NSColor.white.withAlphaComponent(menuBarAlpha).setStroke()
         menuBar.stroke()
 
-        // Vertical dividers extend from below the menubar to the bottom of the frame.
-        let dividerTop = menuY - 0.5
-        let dividerBottom = frame.minY + 1.5
-        let drawDivider: (CGFloat) -> Void = { x in
+        // Dividers fill the working area below the menubar — vertical lines run
+        // top-to-bottom, horizontal lines run edge-to-edge.
+        let workingTop = menuY - 0.5
+        let workingBottom = frame.minY + 1.5
+        let workingLeft = frame.minX + 1
+        let workingRight = frame.maxX - 1
+
+        let drawVerticalDivider: (CGFloat) -> Void = { x in
             let line = NSBezierPath()
-            line.move(to: NSPoint(x: x, y: dividerTop))
-            line.line(to: NSPoint(x: x, y: dividerBottom))
+            line.move(to: NSPoint(x: x, y: workingTop))
+            line.line(to: NSPoint(x: x, y: workingBottom))
             line.lineWidth = 1.0
             NSColor.white.withAlphaComponent(dividerAlpha).setStroke()
             line.stroke()
         }
 
+        let drawHorizontalDivider: (CGFloat) -> Void = { y in
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: workingLeft, y: y))
+            line.line(to: NSPoint(x: workingRight, y: y))
+            line.lineWidth = 1.0
+            NSColor.white.withAlphaComponent(dividerAlpha).setStroke()
+            line.stroke()
+        }
+
+        let quarterFractions: [CGFloat] = [0.25, 0.5, 0.75]
+        let sixthFractions: [CGFloat] = [1.0 / 6, 2.0 / 6, 3.0 / 6, 4.0 / 6, 5.0 / 6]
         let usableWidth = frame.width
+        let usableHeight = workingTop - workingBottom
+
         if quartersEnabled {
-            for fraction in [0.25, 0.5, 0.75] {
-                drawDivider(frame.minX + usableWidth * CGFloat(fraction))
+            for fraction in quarterFractions {
+                drawVerticalDivider(frame.minX + usableWidth * fraction)
+                drawHorizontalDivider(workingBottom + usableHeight * fraction)
             }
         }
-        if thirdsEnabled {
-            for fraction in [1.0 / 3.0, 2.0 / 3.0] {
-                drawDivider(frame.minX + usableWidth * CGFloat(fraction))
+        if sixthsEnabled {
+            for fraction in sixthFractions {
+                drawVerticalDivider(frame.minX + usableWidth * fraction)
+                drawHorizontalDivider(workingBottom + usableHeight * fraction)
             }
         }
     }

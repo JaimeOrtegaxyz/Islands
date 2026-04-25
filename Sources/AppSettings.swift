@@ -116,14 +116,14 @@ struct ModifierSet: OptionSet, Hashable {
 
 enum SnapProfile: Int, CaseIterable {
     case quarters
-    case thirds
+    case sixths
     case both
 
     var displayName: String {
         switch self {
         case .quarters: return "Quarters"
-        case .thirds: return "Thirds"
-        case .both: return "Quarters + Thirds"
+        case .sixths: return "Sixths"
+        case .both: return "Quarters + Sixths"
         }
     }
 
@@ -131,10 +131,10 @@ enum SnapProfile: Int, CaseIterable {
         switch self {
         case .quarters:
             return [1.0 / 4, 1.0 / 2, 3.0 / 4]
-        case .thirds:
-            return [1.0 / 3, 2.0 / 3]
+        case .sixths:
+            return [1.0 / 6, 2.0 / 6, 3.0 / 6, 4.0 / 6, 5.0 / 6]
         case .both:
-            return [1.0 / 4, 1.0 / 3, 1.0 / 2, 2.0 / 3, 3.0 / 4]
+            return [1.0 / 6, 1.0 / 4, 1.0 / 3, 1.0 / 2, 2.0 / 3, 3.0 / 4, 5.0 / 6]
         }
     }
 }
