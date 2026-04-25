@@ -1014,12 +1014,13 @@ private final class SnapPreviewView: NSView {
         let cornerRadius: CGFloat = 6
         let cellAlpha: CGFloat = 0.5
         let gap: CGFloat = 1.0
+        let strokeWidth: CGFloat = 1.2
 
         let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
 
         // Outer rectangle (the "desktop").
         let outline = NSBezierPath(roundedRect: frame, xRadius: cornerRadius, yRadius: cornerRadius)
-        outline.lineWidth = 1.2
+        outline.lineWidth = strokeWidth
         NSColor.white.withAlphaComponent(outlineAlpha).setStroke()
         outline.stroke()
 
@@ -1032,13 +1033,23 @@ private final class SnapPreviewView: NSView {
         NSColor.white.withAlphaComponent(menuBarAlpha).setStroke()
         menuBar.stroke()
 
-        // The working area below the menubar — the cells representing snap zones
-        // are drawn inside this rect with small gaps between them.
+        // Working area: edge-to-edge inside the outline stroke, below the menubar
+        // line. Cells fill this rect directly; the rounded-interior clip below
+        // takes care of the corners so there's no perimeter gap.
+        let strokeInset = strokeWidth / 2
+        let interiorRect = frame.insetBy(dx: strokeInset, dy: strokeInset)
+        let interiorRadius = max(cornerRadius - strokeInset, 0)
+        let interiorPath = NSBezierPath(
+            roundedRect: interiorRect,
+            xRadius: interiorRadius,
+            yRadius: interiorRadius
+        )
+
         let workingRect = NSRect(
-            x: frame.minX + 2,
-            y: frame.minY + 2,
-            width: frame.width - 4,
-            height: menuY - frame.minY - 3
+            x: interiorRect.minX,
+            y: interiorRect.minY,
+            width: interiorRect.width,
+            height: menuY - interiorRect.minY - 0.4
         )
 
         var activeCellPaths: [NSBezierPath] = []
@@ -1051,10 +1062,11 @@ private final class SnapPreviewView: NSView {
         guard !activeCellPaths.isEmpty else { return }
 
         // Each combination (Quarters, Sixths, Quarters+Sixths) reads as its own
-        // standalone layout: clip to the intersection of every active grid's
-        // cell mask, then fill once at a uniform alpha — no layering, every
-        // selection sits at the same visual weight.
+        // standalone layout: clip to the rounded interior, intersect every
+        // active grid's cell mask, then fill once at a uniform alpha — every
+        // selection sits at the same visual weight, with no perimeter gap.
         NSGraphicsContext.saveGraphicsState()
+        interiorPath.addClip()
         for path in activeCellPaths { path.addClip() }
         NSColor.white.withAlphaComponent(cellAlpha).setFill()
         NSBezierPath(rect: workingRect).fill()
