@@ -167,7 +167,7 @@ final class SettingsWindowController: NSWindowController {
         let column = NSStackView(views: [
             sectionHeader("Shortcuts"),
             fieldGroup(label: "Base combo", control: baseRecorder),
-            fieldGroup(label: "Reverse stack", control: reverseCyclePills),
+            fieldGroup(label: "Reverse stack adds", control: reverseCyclePills),
             fieldGroup(label: "Centered mode adds", control: centeredModePills),
             previewLabel,
             peekGroup,
@@ -187,10 +187,14 @@ final class SettingsWindowController: NSWindowController {
         accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
         accessibilityStatusLabel.alphaValue = 0.9
 
+        let accessibilitySpacer = NSView()
+        accessibilitySpacer.setContentHuggingPriority(.init(1), for: .horizontal)
+
         accessibilityRow.orientation = .horizontal
         accessibilityRow.alignment = .centerY
         accessibilityRow.spacing = 12
         accessibilityRow.addArrangedSubview(accessibilityStatusLabel)
+        accessibilityRow.addArrangedSubview(accessibilitySpacer)
         accessibilityRow.addArrangedSubview(accessibilityButton)
 
         let spacer = NSView()
@@ -225,6 +229,7 @@ final class SettingsWindowController: NSWindowController {
             bottomRow.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             accessibilityRow.leadingAnchor.constraint(equalTo: column.leadingAnchor),
             accessibilityRow.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            accessibilityButton.widthAnchor.constraint(equalTo: restoreDefaultsButton.widthAnchor),
         ])
         return column
     }
@@ -305,8 +310,8 @@ final class SettingsWindowController: NSWindowController {
 
         previewLabel.stringValue = """
         Move/resize    \(settings.baseModifiers.symbolString) + arrows / Return / Tab
-        Reverse stack  \(settings.reverseCycleModifiers.symbolString) + Tab
         Centered       \(settings.centeredModeModifiers.symbolString) + arrows
+        Reverse stack  \(settings.reverseCycleModifiers.symbolString) + Tab
         """
         refreshSystemState()
     }
