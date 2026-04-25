@@ -1012,8 +1012,8 @@ private final class SnapPreviewView: NSView {
         let menuBarAlpha: CGFloat = 0.55
         let menuBarHeight: CGFloat = 7
         let cornerRadius: CGFloat = 6
-        let cellAlpha: CGFloat = 0.18
-        let gap: CGFloat = 1.5
+        let cellAlpha: CGFloat = 0.25
+        let gap: CGFloat = 1.0
 
         let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
 
@@ -1050,14 +1050,14 @@ private final class SnapPreviewView: NSView {
         }
         guard !activeCellPaths.isEmpty else { return }
 
-        // Intersect every active grid's cell mask so any divider from any grid
-        // stays transparent. Fill once per active grid so layering still adds a
-        // subtle density bump.
+        // Each combination (Quarters, Sixths, Quarters+Sixths) reads as its own
+        // standalone layout: clip to the intersection of every active grid's
+        // cell mask, then fill once at a uniform alpha — no layering, every
+        // selection sits at the same visual weight.
         NSGraphicsContext.saveGraphicsState()
         for path in activeCellPaths { path.addClip() }
         NSColor.white.withAlphaComponent(cellAlpha).setFill()
-        let fill = NSBezierPath(rect: workingRect)
-        for _ in activeCellPaths { fill.fill() }
+        NSBezierPath(rect: workingRect).fill()
         NSGraphicsContext.restoreGraphicsState()
     }
 
