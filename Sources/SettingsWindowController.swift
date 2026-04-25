@@ -162,6 +162,28 @@ final class SettingsWindowController: NSWindowController {
         previewLabel.alphaValue = 0.75
         previewLabel.maximumNumberOfLines = 3
 
+        let peekGroup = fieldGroup(label: "Peek size", control: peekSizePills)
+
+        let column = NSStackView(views: [
+            sectionHeader("Shortcuts"),
+            fieldGroup(label: "Base combo", control: baseRecorder),
+            fieldGroup(label: "Reverse stack", control: reverseCyclePills),
+            fieldGroup(label: "Centered mode adds", control: centeredModePills),
+            previewLabel,
+            peekGroup,
+        ])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 18
+        column.setCustomSpacing(14, after: column.arrangedSubviews[0])
+        column.setCustomSpacing(20, after: column.arrangedSubviews[3])
+        column.setCustomSpacing(24, after: previewLabel)
+        return column
+    }
+
+    private func makeLayoutColumn() -> NSView {
+        let snapGroup = fieldGroup(label: "Snap sizes", control: snapSizeSelector)
+
         accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
         accessibilityStatusLabel.alphaValue = 0.9
 
@@ -180,11 +202,8 @@ final class SettingsWindowController: NSWindowController {
         bottomRow.spacing = 20
 
         let column = NSStackView(views: [
-            sectionHeader("Shortcuts"),
-            fieldGroup(label: "Base combo", control: baseRecorder),
-            fieldGroup(label: "Backward stack adds", control: reverseCyclePills),
-            fieldGroup(label: "Centered mode adds", control: centeredModePills),
-            previewLabel,
+            sectionHeader("Layout"),
+            snapGroup,
             sectionHeader("System"),
             accessibilityRow,
             bottomRow,
@@ -193,9 +212,8 @@ final class SettingsWindowController: NSWindowController {
         column.alignment = .leading
         column.spacing = 18
         column.setCustomSpacing(14, after: column.arrangedSubviews[0])
-        column.setCustomSpacing(20, after: column.arrangedSubviews[3])
-        column.setCustomSpacing(26, after: previewLabel)
-        column.setCustomSpacing(14, after: column.arrangedSubviews[5])
+        column.setCustomSpacing(26, after: snapGroup)
+        column.setCustomSpacing(14, after: column.arrangedSubviews[2])
         column.setCustomSpacing(12, after: accessibilityRow)
 
         // Stretch system rows to the column's full width so Restore Defaults
@@ -208,22 +226,6 @@ final class SettingsWindowController: NSWindowController {
             accessibilityRow.leadingAnchor.constraint(equalTo: column.leadingAnchor),
             accessibilityRow.trailingAnchor.constraint(equalTo: column.trailingAnchor),
         ])
-        return column
-    }
-
-    private func makeLayoutColumn() -> NSView {
-        let snapGroup = fieldGroup(label: "Snap sizes", control: snapSizeSelector)
-        let peekGroup = fieldGroup(label: "Peek size", control: peekSizePills)
-
-        let column = NSStackView(views: [
-            sectionHeader("Layout"),
-            snapGroup,
-            peekGroup,
-        ])
-        column.orientation = .vertical
-        column.alignment = .leading
-        column.spacing = 18
-        column.setCustomSpacing(14, after: column.arrangedSubviews[0])
         return column
     }
 
@@ -302,9 +304,9 @@ final class SettingsWindowController: NSWindowController {
         )
 
         previewLabel.stringValue = """
-        Move/resize  \(settings.baseModifiers.symbolString) + arrows / Return / Tab
-        Back stack   \(settings.reverseCycleModifiers.symbolString) + Tab
-        Centered     \(settings.centeredModeModifiers.symbolString) + arrows
+        Move/resize    \(settings.baseModifiers.symbolString) + arrows / Return / Tab
+        Reverse stack  \(settings.reverseCycleModifiers.symbolString) + Tab
+        Centered       \(settings.centeredModeModifiers.symbolString) + arrows
         """
         refreshSystemState()
     }
@@ -941,8 +943,8 @@ private final class SnapSizeSelector: NSView {
         NSLayoutConstraint.activate([
             preview.leadingAnchor.constraint(equalTo: leadingAnchor),
             preview.topAnchor.constraint(equalTo: topAnchor),
-            preview.widthAnchor.constraint(equalToConstant: 300),
-            preview.heightAnchor.constraint(equalToConstant: 188),
+            preview.widthAnchor.constraint(equalToConstant: 240),
+            preview.heightAnchor.constraint(equalToConstant: 150),
             pillRow.leadingAnchor.constraint(equalTo: leadingAnchor),
             pillRow.topAnchor.constraint(equalTo: preview.bottomAnchor, constant: 10),
             pillRow.bottomAnchor.constraint(equalTo: bottomAnchor),
