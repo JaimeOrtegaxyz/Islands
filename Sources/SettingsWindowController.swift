@@ -1009,10 +1009,11 @@ private final class SnapPreviewView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let outlineAlpha: CGFloat = 0.85
-        let dividerAlpha: CGFloat = 0.95
         let menuBarAlpha: CGFloat = 0.55
         let menuBarHeight: CGFloat = 7
         let cornerRadius: CGFloat = 6
+        let cellAlpha: CGFloat = 0.13
+        let gap: CGFloat = 1.5
 
         let frame = bounds.insetBy(dx: 0.75, dy: 0.75)
 
@@ -1031,46 +1032,33 @@ private final class SnapPreviewView: NSView {
         NSColor.white.withAlphaComponent(menuBarAlpha).setStroke()
         menuBar.stroke()
 
-        // Dividers fill the working area below the menubar — vertical lines run
-        // top-to-bottom, horizontal lines run edge-to-edge.
-        let workingTop = menuY - 0.5
-        let workingBottom = frame.minY + 1.5
-        let workingLeft = frame.minX + 1
-        let workingRight = frame.maxX - 1
-
-        let drawVerticalDivider: (CGFloat) -> Void = { x in
-            let line = NSBezierPath()
-            line.move(to: NSPoint(x: x, y: workingTop))
-            line.line(to: NSPoint(x: x, y: workingBottom))
-            line.lineWidth = 1.0
-            NSColor.white.withAlphaComponent(dividerAlpha).setStroke()
-            line.stroke()
-        }
-
-        let drawHorizontalDivider: (CGFloat) -> Void = { y in
-            let line = NSBezierPath()
-            line.move(to: NSPoint(x: workingLeft, y: y))
-            line.line(to: NSPoint(x: workingRight, y: y))
-            line.lineWidth = 1.0
-            NSColor.white.withAlphaComponent(dividerAlpha).setStroke()
-            line.stroke()
-        }
-
-        let quarterFractions: [CGFloat] = [0.25, 0.5, 0.75]
-        let sixthFractions: [CGFloat] = [1.0 / 6, 2.0 / 6, 3.0 / 6, 4.0 / 6, 5.0 / 6]
-        let usableWidth = frame.width
-        let usableHeight = workingTop - workingBottom
+        // The working area below the menubar — the cells representing snap zones
+        // are drawn inside this rect with small gaps between them.
+        let workingRect = NSRect(
+            x: frame.minX + 2,
+            y: frame.minY + 2,
+            width: frame.width - 4,
+            height: menuY - frame.minY - 3
+        )
 
         if quartersEnabled {
-            for fraction in quarterFractions {
-                drawVerticalDivider(frame.minX + usableWidth * fraction)
-                drawHorizontalDivider(workingBottom + usableHeight * fraction)
-            }
+            drawCellGrid(in: workingRect, columns: 4, rows: 4, gap: gap, alpha: cellAlpha)
         }
         if sixthsEnabled {
-            for fraction in sixthFractions {
-                drawVerticalDivider(frame.minX + usableWidth * fraction)
-                drawHorizontalDivider(workingBottom + usableHeight * fraction)
+            drawCellGrid(in: workingRect, columns: 6, rows: 6, gap: gap, alpha: cellAlpha)
+        }
+    }
+
+    private func drawCellGrid(in rect: NSRect, columns: Int, rows: Int, gap: CGFloat, alpha: CGFloat) {
+        let cellW = (rect.width - gap * CGFloat(columns - 1)) / CGFloat(columns)
+        let cellH = (rect.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
+        NSColor.white.withAlphaComponent(alpha).setFill()
+        for col in 0..<columns {
+            for row in 0..<rows {
+                let x = rect.minX + (cellW + gap) * CGFloat(col)
+                let y = rect.minY + (cellH + gap) * CGFloat(row)
+                let cell = NSRect(x: x, y: y, width: cellW, height: cellH)
+                NSBezierPath(roundedRect: cell, xRadius: 1, yRadius: 1).fill()
             }
         }
     }
