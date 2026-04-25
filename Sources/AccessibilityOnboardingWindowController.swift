@@ -7,13 +7,17 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         self.accessibilityManager = accessibilityManager
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 320),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 300),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Enable Accessibility Access"
-        window.center()
+        window.title = "Islands"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .islandsBrand
         window.isReleasedWhenClosed = false
 
         super.init(window: window)
@@ -35,57 +39,106 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
 
     private func buildInterface() {
         guard let contentView = window?.contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.islandsBrand.cgColor
 
-        let container = NSStackView()
-        container.orientation = .vertical
-        container.alignment = .leading
-        container.spacing = 16
-        container.translatesAutoresizingMaskIntoConstraints = false
+        let title = WhiteLabel()
+        title.stringValue = "Islands"
+        title.font = .systemFont(ofSize: 30, weight: .semibold)
+        title.alignment = .center
 
-        let symbol = NSImageView()
-        symbol.image = NSImage(systemSymbolName: "hand.raised.fill", accessibilityDescription: "Accessibility required")
-        symbol.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 34, weight: .medium)
+        let body = WhiteLabel()
+        body.stringValue = "needs Accessibility access\nto move and arrange your windows."
+        body.font = .systemFont(ofSize: 13, weight: .regular)
+        body.alignment = .center
+        body.alphaValue = 0.85
+        body.maximumNumberOfLines = 0
 
-        let titleLabel = NSTextField(labelWithString: "Islands needs Accessibility access before hotkeys can work.")
-        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.maximumNumberOfLines = 0
+        let openButton = OutlineButton(title: "Open System Settings")
+        openButton.onClick = { [weak self] in self?.accessibilityManager.openSystemSettings() }
 
-        let bodyLabel = NSTextField(wrappingLabelWithString: "Grant access in System Settings, then come back to Islands. Islands will offer a relaunch as soon as access is enabled so setup finishes cleanly.")
-        bodyLabel.textColor = .secondaryLabelColor
+        let notNowButton = TextLinkButton(title: "Not now")
+        notNowButton.onClick = { [weak self] in self?.window?.close() }
 
-        let stepsLabel = NSTextField(wrappingLabelWithString: "1. Click “Open Accessibility Settings”.\n2. Turn on Islands in the Accessibility list.\n3. Return to Islands. Access is rechecked automatically.")
-        stepsLabel.font = .systemFont(ofSize: 13)
-
-        let openButton = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibilitySettings))
-        openButton.bezelStyle = .rounded
-
-        let closeButton = NSButton(title: "Not Now", target: self, action: #selector(closeWindow))
-        closeButton.bezelStyle = .rounded
-
-        let buttonRow = NSStackView(views: [openButton, closeButton])
-        buttonRow.orientation = .horizontal
-        buttonRow.spacing = 10
-
-        container.addArrangedSubview(symbol)
-        container.addArrangedSubview(titleLabel)
-        container.addArrangedSubview(bodyLabel)
-        container.addArrangedSubview(stepsLabel)
-        container.addArrangedSubview(buttonRow)
-
-        contentView.addSubview(container)
+        let stack = NSStackView(views: [title, body, openButton, notNowButton])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 14
+        stack.setCustomSpacing(10, after: title)
+        stack.setCustomSpacing(28, after: body)
+        stack.setCustomSpacing(10, after: openButton)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+            stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 6),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 36),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -36),
+        ])
+    }
+}
+
+extension NSColor {
+    static let islandsBrand = NSColor(
+        srgbRed: 0x52 / 255.0,
+        green: 0xCB / 255.0,
+        blue: 0xD5 / 255.0,
+        alpha: 1.0
+    )
+}
+
+private final class TextLinkButton: NSView {
+    var onClick: (() -> Void)?
+
+    private let label = WhiteLabel()
+    private var trackingArea: NSTrackingArea?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        label.stringValue = title
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.alphaValue = 0.65
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
         ])
     }
 
-    @objc private func openAccessibilitySettings() {
-        accessibilityManager.openSystemSettings()
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
     }
 
-    @objc private func closeWindow() {
-        window?.close()
+    override func mouseEntered(with event: NSEvent) {
+        label.alphaValue = 1.0
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        label.alphaValue = 0.65
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onClick?()
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }

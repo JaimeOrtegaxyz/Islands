@@ -384,7 +384,7 @@ private final class BackgroundImageView: NSView {
 
 // MARK: - White label
 
-private final class WhiteLabel: NSTextField {
+final class WhiteLabel: NSTextField {
     init() {
         super.init(frame: .zero)
         isEditable = false
@@ -404,7 +404,7 @@ private final class WhiteLabel: NSTextField {
 
 // MARK: - Outline button
 
-private final class OutlineButton: NSView {
+final class OutlineButton: NSView {
     var onClick: (() -> Void)?
 
     private let titleLabel = WhiteLabel()
