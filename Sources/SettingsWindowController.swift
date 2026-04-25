@@ -167,8 +167,8 @@ final class SettingsWindowController: NSWindowController {
         let column = NSStackView(views: [
             sectionHeader("Shortcuts"),
             fieldGroup(label: "Base combo", control: baseRecorder),
-            fieldGroup(label: "Reverse stack adds", control: reverseCyclePills),
             fieldGroup(label: "Centered mode adds", control: centeredModePills),
+            fieldGroup(label: "Reverse stack adds", control: reverseCyclePills),
             previewLabel,
             peekGroup,
         ])
