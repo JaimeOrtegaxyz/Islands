@@ -8,7 +8,7 @@ build:
 	cp Resources/Info.plist Islands.app/Contents/
 	cp Resources/Islands.icns Islands.app/Contents/Resources/
 	cp Resources/StatusBarIcon.svg Islands.app/Contents/Resources/
-	cp settings-bg.webp Islands.app/Contents/Resources/
+	cp settings-bg.png Islands.app/Contents/Resources/
 
 clean:
 	rm -rf .build Islands.app

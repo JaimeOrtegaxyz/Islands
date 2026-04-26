@@ -374,8 +374,8 @@ private final class BackgroundImageView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func loadImage() {
-        let url = Bundle.main.url(forResource: "settings-bg", withExtension: "webp")
-            ?? URL(fileURLWithPath: "settings-bg.webp")
+        let url = Bundle.main.url(forResource: "settings-bg", withExtension: "png")
+            ?? URL(fileURLWithPath: "settings-bg.png")
         if let image = NSImage(contentsOf: url) {
             layer?.contents = image
         }
