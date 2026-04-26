@@ -334,18 +334,6 @@ final class SettingsWindowController: NSWindowController {
 
     private func restoreDefaults() {
         settingsStore.restoreDefaults()
-
-        if launchAtLoginController.isEnabled() {
-            do {
-                try launchAtLoginController.setEnabled(false)
-            } catch {
-                presentErrorAlert(
-                    title: "Defaults restored with one exception",
-                    message: "Islands settings were reset, but launch at login could not be disabled: \(error.localizedDescription)"
-                )
-            }
-        }
-
         refreshUI()
     }
 
