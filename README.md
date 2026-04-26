@@ -12,17 +12,19 @@ Keybindings tile windows across a multi-position spectrum per axis. Hit it again
 
 | Shortcut | What it does |
 |---|---|
-| `Ctrl+Opt+←` | Cycle left (¾ → ⅔ → ½ → ⅓ → ¼ → overflow to next monitor) |
+| `Ctrl+Opt+←` | Cycle left (⅚ → ⅔ → ½ → ⅓ → ⅙ → overflow to next monitor) |
 | `Ctrl+Opt+→` | Cycle right |
 | `Ctrl+Opt+↑` | Cycle up |
 | `Ctrl+Opt+↓` | Cycle down |
 | `Ctrl+Opt+Return` | Reset to full screen |
 | `Ctrl+Opt+Tab` | Cycle accordion stack forward |
-| `Ctrl+Opt+Shift+Tab` | Cycle accordion stack backward |
+| `Ctrl+Opt+Shift+Tab` | Reverse stack (cycle backward) |
 | `Ctrl+Opt+Cmd+←` | Center horizontally (shrink) |
 | `Ctrl+Opt+Cmd+→` | Center horizontally (grow) |
 | `Ctrl+Opt+Cmd+↑` | Center vertically (shrink) |
 | `Ctrl+Opt+Cmd+↓` | Center vertically (grow) |
+
+Snap sizes default to **sixths**. Switch to **quarters** or combine both in Settings — the menu-bar icon → *Settings…* lets you reassign every modifier and pick a snap profile.
 
 Horizontal and vertical axes are independent. Tile left half + top half and you get the top-left quarter. Centered mode and edge-snap mode are also independent per axis — mix them, shake them. Just like that booty.
 
