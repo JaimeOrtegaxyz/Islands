@@ -11,8 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager!
     private var settingsWindowController: SettingsWindowController!
     private var accessibilityOnboardingWindowController: AccessibilityOnboardingWindowController!
+    private var splashWindowController: SplashWindowController?
     private var accessibilityPollTimer: Timer?
     private var lastAccessibilityTrustedState = false
+
+    private static let hasSeenSplashKey = "hasSeenSplash"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         settingsStore = SettingsStore()
@@ -33,8 +36,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         lastAccessibilityTrustedState = accessibilityManager.isTrusted()
-        evaluateAccessibility(showPromptIfNeeded: true)
+        playSplashIfNeeded { [weak self] in
+            self?.evaluateAccessibility(showPromptIfNeeded: true)
+        }
         print("Islands is running.")
+    }
+
+    private func playSplashIfNeeded(then continuation: @escaping () -> Void) {
+        guard !UserDefaults.standard.bool(forKey: Self.hasSeenSplashKey) else {
+            continuation()
+            return
+        }
+        let splash = SplashWindowController { [weak self] in
+            UserDefaults.standard.set(true, forKey: Self.hasSeenSplashKey)
+            self?.splashWindowController = nil
+            continuation()
+        }
+        splashWindowController = splash
+        splash.showAndPlay()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

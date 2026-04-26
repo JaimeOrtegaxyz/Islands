@@ -9,6 +9,7 @@ build:
 	cp Resources/Islands.icns Islands.app/Contents/Resources/
 	cp Resources/StatusBarIcon.svg Islands.app/Contents/Resources/
 	cp settings-bg.png Islands.app/Contents/Resources/
+	cp video-islands.mp4 Islands.app/Contents/Resources/
 
 clean:
 	rm -rf .build Islands.app
