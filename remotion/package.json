@@ -1,0 +1,19 @@
+{
+  "name": "islands-remotion",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/Root.tsx",
+    "render": "remotion render src/Root.tsx IslandsDemo out/islands-demo.mp4 --codec=h264 --crf=18"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.250",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.250"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "typescript": "5.6.3"
+  }
+}
