@@ -7,7 +7,7 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         self.accessibilityManager = accessibilityManager
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -42,6 +42,17 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.islandsBrand.cgColor
 
+        let logo = NSImageView()
+        logo.contentTintColor = .white
+        logo.translatesAutoresizingMaskIntoConstraints = false
+        if let url = Bundle.main.url(forResource: "StatusBarIcon", withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            let aspect = image.size.width / max(image.size.height, 1)
+            image.size = NSSize(width: 56 * aspect, height: 56)
+            image.isTemplate = true
+            logo.image = image
+        }
+
         let title = WhiteLabel()
         title.stringValue = "Islands"
         title.font = .systemFont(ofSize: 30, weight: .semibold)
@@ -60,10 +71,11 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         let notNowButton = TextLinkButton(title: "Not now")
         notNowButton.onClick = { [weak self] in self?.window?.close() }
 
-        let stack = NSStackView(views: [title, body, openButton, notNowButton])
+        let stack = NSStackView(views: [logo, title, body, openButton, notNowButton])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 14
+        stack.setCustomSpacing(16, after: logo)
         stack.setCustomSpacing(10, after: title)
         stack.setCustomSpacing(28, after: body)
         stack.setCustomSpacing(10, after: openButton)
@@ -81,9 +93,9 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
 
 extension NSColor {
     static let islandsBrand = NSColor(
-        srgbRed: 0x52 / 255.0,
-        green: 0xCB / 255.0,
-        blue: 0xD5 / 255.0,
+        srgbRed: 0x79 / 255.0,
+        green: 0xB5 / 255.0,
+        blue: 0xB5 / 255.0,
         alpha: 1.0
     )
 }
