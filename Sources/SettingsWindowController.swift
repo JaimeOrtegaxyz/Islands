@@ -158,7 +158,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func makeShortcutsColumn() -> NSView {
-        previewLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        previewLabel.font = .quicksand(11, weight: .regular)
         previewLabel.alphaValue = 0.75
         previewLabel.maximumNumberOfLines = 3
 
@@ -184,7 +184,7 @@ final class SettingsWindowController: NSWindowController {
     private func makeLayoutColumn() -> NSView {
         let snapGroup = fieldGroup(label: "Snap sizes", control: snapSizeSelector)
 
-        accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        accessibilityStatusLabel.font = .quicksand(12, weight: .regular)
         accessibilityStatusLabel.alphaValue = 0.9
 
         let accessibilitySpacer = NSView()
@@ -239,19 +239,19 @@ final class SettingsWindowController: NSWindowController {
 
         let title = WhiteLabel()
         title.stringValue = "Islands"
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.font = .quicksand(13, weight: .semibold)
         title.alignment = .center
         title.alphaValue = 0.95
 
         let tagline = WhiteLabel()
         tagline.stringValue = "Native window tiling for macOS"
-        tagline.font = .systemFont(ofSize: 11, weight: .regular)
+        tagline.font = .quicksand(11, weight: .regular)
         tagline.alignment = .center
         tagline.alphaValue = 0.75
 
         let version = WhiteLabel()
         version.stringValue = "Version \(versionString)"
-        version.font = .systemFont(ofSize: 10, weight: .regular)
+        version.font = .quicksand(10, weight: .regular)
         version.alignment = .center
         version.alphaValue = 0.6
 
@@ -266,10 +266,10 @@ final class SettingsWindowController: NSWindowController {
     private func sectionHeader(_ text: String) -> NSView {
         let label = WhiteLabel()
         label.stringValue = text.uppercased()
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.font = .quicksand(10, weight: .semibold)
 
         let attributed = NSMutableAttributedString(string: text.uppercased(), attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .font: NSFont.quicksand(10, weight: .semibold),
             .foregroundColor: NSColor.white,
             .kern: 2.4,
         ])
@@ -281,7 +281,7 @@ final class SettingsWindowController: NSWindowController {
     private func fieldGroup(label text: String, control: NSView) -> NSView {
         let label = WhiteLabel()
         label.stringValue = text
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = .quicksand(12, weight: .medium)
         label.alphaValue = 0.9
 
         let stack = NSStackView(views: [label, control])
@@ -309,9 +309,9 @@ final class SettingsWindowController: NSWindowController {
         )
 
         previewLabel.stringValue = """
-        Move/resize    \(settings.baseModifiers.symbolString) + arrows / Return / Tab
-        Centered       \(settings.centeredModeModifiers.symbolString) + arrows
-        Reverse stack  \(settings.reverseCycleModifiers.symbolString) + Tab
+        Move/resize · \(settings.baseModifiers.symbolString) + arrows / Return / Tab
+        Centered · \(settings.centeredModeModifiers.symbolString) + arrows
+        Reverse stack · \(settings.reverseCycleModifiers.symbolString) + Tab
         """
         refreshSystemState()
     }
@@ -409,7 +409,7 @@ final class OutlineButton: NSView {
         layer?.backgroundColor = NSColor.clear.cgColor
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.font = .quicksand(12, weight: .medium)
         titleLabel.alignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -500,7 +500,7 @@ private final class StyledCheckbox: NSView {
         box.addSubview(check)
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        titleLabel.font = .quicksand(12, weight: .regular)
         titleLabel.alphaValue = 0.9
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -583,13 +583,13 @@ private final class ModifierRecorderView: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        displayLabel.font = .monospacedSystemFont(ofSize: 20, weight: .medium)
+        displayLabel.font = .quicksand(20, weight: .medium)
         displayLabel.alignment = .center
         displayLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(displayLabel)
 
         hintLabel.stringValue = "Press keys…"
-        hintLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        hintLabel.font = .quicksand(11, weight: .regular)
         hintLabel.alignment = .center
         hintLabel.alphaValue = 0
         hintLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -846,7 +846,7 @@ private final class PillButton: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.75).cgColor
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.font = .quicksand(12, weight: .medium)
         titleLabel.alignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)

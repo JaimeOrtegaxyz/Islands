@@ -20,6 +20,8 @@
     <string>APPL</string>
     <key>LSUIElement</key>
     <true/>
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts/</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>Islands needs Accessibility access to move and resize windows.</string>
 </dict>
