@@ -1,6 +1,7 @@
 .PHONY: build clean run
 
 build:
+	rm -rf Islands.app
 	swift build -c release
 	mkdir -p Islands.app/Contents/MacOS
 	mkdir -p Islands.app/Contents/Resources
