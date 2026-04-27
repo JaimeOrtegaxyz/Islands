@@ -75,12 +75,16 @@ final class WindowEngine {
 
     /// Focus a window: raise it and activate its owning application
     func focus(_ window: AXUIElement) {
-        raise(window)
-        if let pid = getOwnerPID(window) {
-            if let app = NSRunningApplication(processIdentifier: pid) {
-                app.activate()
-            }
+        if let pid = getOwnerPID(window),
+           let app = NSRunningApplication(processIdentifier: pid) {
+            _ = app.activate()
         }
+
+        // Best effort: make the specific target window the app's active window,
+        // not just any previously focused window from the same process.
+        AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        raise(window)
     }
 
     /// Get the PID of the application that owns a window

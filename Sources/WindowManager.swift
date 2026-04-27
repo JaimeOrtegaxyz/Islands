@@ -224,6 +224,9 @@ final class WindowManager {
         let screenFrame: CGRect
         if let targetScreen {
             screenFrame = screens.visibleFrame(of: targetScreen)
+        } else if let currentFrame = engine.getFrame(window),
+                  let currentScreenFrame = screens.screenFrame(for: currentFrame) {
+            screenFrame = currentScreenFrame
         } else if let position = engine.getPosition(window),
                   let currentScreenFrame = screens.screenFrame(for: position) {
             screenFrame = currentScreenFrame
@@ -253,9 +256,8 @@ final class WindowManager {
     private func synchronizeZoneMembership(for windowID: CGWindowID, window: AXUIElement) {
         guard var state = winState[windowID],
               let oldZone = state.currentZone,
-              let position = engine.getPosition(window),
               let actualFrame = engine.getFrame(window),
-              let screenFrame = screens.screenFrame(for: position) else {
+              let screenFrame = screens.screenFrame(for: actualFrame) else {
             return
         }
 
@@ -264,7 +266,7 @@ final class WindowManager {
             screenFrame: screenFrame,
             peekInset: peekInsetForWindow(windowID: windowID, zoneKey: oldZone)
         )
-        let liveZone = getZoneKey(state: state, screenID: screens.screenID(for: position))
+        let liveZone = getZoneKey(state: state, screenID: screens.screenID(for: actualFrame))
 
         guard framesApproximatelyEqual(actualFrame, expectedFrame) else {
             removeFromZone(windowID: windowID, zoneKey: oldZone)
@@ -328,6 +330,8 @@ final class WindowManager {
         let screenID: String
         if let targetScreen {
             screenID = screens.screenID(for: targetScreen)
+        } else if let currentFrame = engine.getFrame(window) {
+            screenID = screens.screenID(for: currentFrame)
         } else if let position = engine.getPosition(window) {
             screenID = screens.screenID(for: position)
         } else {

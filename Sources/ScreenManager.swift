@@ -24,9 +24,21 @@ final class ScreenManager {
         return visibleFrame(of: screen)
     }
 
+    /// Get the visible frame of the screen containing most of a window frame.
+    func screenFrame(for windowFrame: CGRect) -> CGRect? {
+        guard let screen = screen(for: windowFrame) else { return nil }
+        return visibleFrame(of: screen)
+    }
+
     /// Get a stable screen identifier
     func screenID(for point: CGPoint) -> String {
         guard let screen = screen(for: point) else { return "unknown" }
+        return stableID(for: screen)
+    }
+
+    /// Get a stable screen identifier for the screen containing most of a window frame.
+    func screenID(for windowFrame: CGRect) -> String {
+        guard let screen = screen(for: windowFrame) else { return "unknown" }
         return stableID(for: screen)
     }
 
@@ -119,31 +131,57 @@ final class ScreenManager {
 
     /// Get the visible frame for a target screen (converting from NSScreen coordinates to top-left origin)
     func visibleFrame(of screen: NSScreen) -> CGRect {
-        // NSScreen uses bottom-left origin; we need top-left origin for window positioning
-        let mainScreen = NSScreen.screens[0]
-        let mainHeight = mainScreen.frame.height
-        let visible = screen.visibleFrame
-        return CGRect(
-            x: visible.origin.x,
-            y: mainHeight - visible.origin.y - visible.height,
-            width: visible.width,
-            height: visible.height
-        )
+        convertToTopLeftCoordinates(screen.visibleFrame)
     }
 
     // MARK: - Private
 
     private func screen(for point: CGPoint) -> NSScreen? {
-        // Convert top-left point to bottom-left for NSScreen coordinate system
-        let mainHeight = NSScreen.screens.first?.frame.height ?? 0
-        let flippedPoint = CGPoint(x: point.x, y: mainHeight - point.y)
         for s in screens {
-            if s.frame.contains(flippedPoint) {
+            if frameInTopLeftCoordinates(for: s).contains(point) {
                 return s
             }
         }
         // Fallback: find nearest screen
         return screens.first
+    }
+
+    private func screen(for windowFrame: CGRect) -> NSScreen? {
+        var bestScreen: NSScreen?
+        var bestArea: CGFloat = 0
+
+        for screen in screens {
+            let intersection = frameInTopLeftCoordinates(for: screen).intersection(windowFrame)
+            guard !intersection.isNull, !intersection.isEmpty else { continue }
+
+            let area = intersection.width * intersection.height
+            if area > bestArea {
+                bestArea = area
+                bestScreen = screen
+            }
+        }
+
+        if let bestScreen {
+            return bestScreen
+        }
+
+        let midpoint = CGPoint(x: windowFrame.midX, y: windowFrame.midY)
+        return screen(for: midpoint)
+    }
+
+    private func frameInTopLeftCoordinates(for screen: NSScreen) -> CGRect {
+        convertToTopLeftCoordinates(screen.frame)
+    }
+
+    private func convertToTopLeftCoordinates(_ frame: CGRect) -> CGRect {
+        // NSScreen uses bottom-left origin; window positions use top-left origin.
+        let mainHeight = NSScreen.screens.first?.frame.height ?? 0
+        return CGRect(
+            x: frame.origin.x,
+            y: mainHeight - frame.origin.y - frame.height,
+            width: frame.width,
+            height: frame.height
+        )
     }
 
     private func stableID(for screen: NSScreen) -> String {
