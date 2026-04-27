@@ -244,7 +244,7 @@ final class SettingsWindowController: NSWindowController {
         title.alphaValue = 0.95
 
         let tagline = WhiteLabel()
-        tagline.stringValue = "Native window tiling for macOS"
+        tagline.stringValue = "A native window manager for macOS"
         tagline.font = .quicksand(11, weight: .regular)
         tagline.alignment = .center
         tagline.alphaValue = 0.75
@@ -255,10 +255,13 @@ final class SettingsWindowController: NSWindowController {
         version.alignment = .center
         version.alphaValue = 0.6
 
-        let stack = NSStackView(views: [title, tagline, version])
+        let credit = CreditByline(url: URL(string: "https://twitter.com/jaimeortega")!)
+
+        let stack = NSStackView(views: [title, tagline, version, credit])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 3
+        stack.setCustomSpacing(7, after: version)
         stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }
@@ -1080,5 +1083,87 @@ private final class SnapPreviewView: NSView {
             }
         }
         return path
+    }
+}
+
+// MARK: - Credit byline
+
+private final class CreditByline: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let url: URL
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false
+
+    init(url: URL) {
+        self.url = url
+        super.init(frame: .zero)
+
+        label.isEditable = false
+        label.isBezeled = false
+        label.drawsBackground = false
+        label.isSelectable = false
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+        ])
+
+        updateAttributed()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func updateAttributed() {
+        let prefixAlpha: CGFloat = isHovered ? 0.75 : 0.55
+        let nameAlpha: CGFloat = isHovered ? 1.0 : 0.8
+
+        let attr = NSMutableAttributedString()
+        attr.append(NSAttributedString(string: "by ", attributes: [
+            .font: NSFont.quicksand(10, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(prefixAlpha),
+        ]))
+        attr.append(NSAttributedString(string: "Jaime Ortega", attributes: [
+            .font: NSFont.quicksand(10, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(nameAlpha),
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ]))
+        label.attributedStringValue = attr
+    }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAttributed()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAttributed()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }
