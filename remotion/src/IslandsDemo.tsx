@@ -1,26 +1,35 @@
 import React from "react";
-import { useCurrentFrame } from "remotion";
+import { interpolate, useCurrentFrame } from "remotion";
 import {
   Desktop,
+  CANVAS_W,
+  CANVAS_H,
+  DESKTOP_X,
   DESKTOP_W,
-  DESKTOP_H,
   TILE_X,
   TILE_Y,
   TILE_W,
   TILE_H,
+  CAPTION_BAND_H,
+  KEYS_BAND_H,
+  BAND_TOP,
 } from "./components/Desktop";
 import { Window } from "./components/Window";
 import { Keycaps } from "./components/Keycaps";
+import { CaptionLine, IntroOutroPanel } from "./components/Caption";
+import { Soundtrack } from "./components/Audio";
 import {
   TIMELINE,
   WINDOWS,
+  APP_NAMES,
   MOTION_DURATION,
   SPAWN_DURATION,
-  KEYCAP_FADE_IN,
-  KEYCAP_HOLD,
-  KEYCAP_FADE_OUT,
+  DEMO_START,
+  DESKTOP_FADE_FROM,
+  DESKTOP_FADE_TO,
+  DESKTOP_REVEAL_FROM,
+  DESKTOP_REVEAL_TO,
   type Geo,
-  type ActionKey,
 } from "./timeline";
 
 const STACK_OFFSET_Y_PX = 38;
@@ -33,33 +42,77 @@ export const IslandsDemo: React.FC = () => {
     .map((id) => buildWindowState(id, frame, renderOrder))
     .filter((s): s is WindowState => s !== null);
 
-  const activeChord = findActiveChord(frame);
+  // Frontmost window's app drives the menubar text.
+  const frontId = renderOrder[renderOrder.length - 1];
+  const frontApp = frontId ? WINDOWS[frontId].app : "finder";
+  const appName = APP_NAMES[frontApp];
+
+  // Outro: the entire desktop (windows + wallpaper + menubar) fades together.
+  const desktopOpacity = interpolate(
+    frame,
+    [DESKTOP_FADE_FROM, DESKTOP_FADE_TO],
+    [1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  // Smooth reveal of the desktop so the wallpaper doesn't pop on under the
+  // intro text — fades in just before Chrome spawns.
+  const desktopReveal = interpolate(
+    frame,
+    [DESKTOP_REVEAL_FROM, DESKTOP_REVEAL_TO],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  const finalDesktopOpacity = desktopOpacity * desktopReveal;
 
   return (
-    <Desktop>
-      {visible.map((s) => {
-        const meta = WINDOWS[s.id];
-        const px = geoToPx(s.geo);
-        return (
-          <Window
-            key={s.id}
-            color={meta.color}
-            x={px.x}
-            y={px.y}
-            w={px.w}
-            h={px.h - s.stackHReductionPx}
-            opacity={s.opacity}
-            stackOffsetY={s.stackOffsetY}
-          />
-        );
-      })}
-      <Keycaps
-        active={activeChord}
+    <>
+      <Soundtrack />
+
+      <Desktop appName={appName} opacity={finalDesktopOpacity}>
+        {visible.map((s) => {
+          const meta = WINDOWS[s.id];
+          const px = geoToPx(s.geo);
+          return (
+            <Window
+              key={s.id}
+              color={meta.color}
+              app={meta.app}
+              x={px.x}
+              y={px.y}
+              w={px.w}
+              h={px.h - s.stackHReductionPx}
+              opacity={s.opacity}
+              stackOffsetY={s.stackOffsetY}
+            />
+          );
+        })}
+      </Desktop>
+
+      {/* Lower band: caption above keys, both below the desktop. */}
+      <CaptionLine
         frame={frame}
-        desktopWidth={DESKTOP_W}
-        desktopHeight={DESKTOP_H}
+        left={DESKTOP_X}
+        top={BAND_TOP}
+        width={DESKTOP_W}
+        height={CAPTION_BAND_H}
       />
-    </Desktop>
+      <Keycaps
+        frame={frame}
+        layoutLeft={DESKTOP_X}
+        layoutTop={BAND_TOP + CAPTION_BAND_H}
+        layoutWidth={DESKTOP_W}
+        layoutHeight={KEYS_BAND_H}
+      />
+
+      {/* Intro/outro text — centered on the canvas vertical midpoint. */}
+      <IntroOutroPanel
+        frame={frame}
+        canvasWidth={CANVAS_W}
+        canvasHeight={CANVAS_H}
+        desktopWidth={DESKTOP_W}
+        desktopX={DESKTOP_X}
+      />
+    </>
   );
 };
 
@@ -67,8 +120,8 @@ type WindowState = {
   id: string;
   geo: Geo;
   opacity: number;
-  stackOffsetY: number; // px subtracted from y at render time
-  stackHReductionPx: number; // px subtracted from h so the stack fits in its zone
+  stackOffsetY: number;
+  stackHReductionPx: number;
 };
 
 function buildWindowState(
@@ -84,14 +137,9 @@ function buildWindowState(
 
   const sinceSpawn = frame - spawn.at;
   const spawnT = clamp(sinceSpawn / SPAWN_DURATION, 0, 1);
-  const opacity = easeOutCubic(spawnT);
+  // Smooth S-curve so the window doesn't pop in.
+  const opacity = easeInOutQuad(spawnT);
 
-  // Stack: front window pushes itself DOWN by (stackSize-1)*peek so back
-  // windows fit above it within the same zone. Each window's net y offset
-  // from natural top = (maxDepth - depth) * peek (positive = downward).
-  // Window renders at `top: y - stackOffsetY`, so stackOffsetY = (depth - maxDepth) * peek.
-  // All windows in the stack also lose maxDepth*peek of height so the
-  // front's bottom still meets the zone's bottom edge.
   const depth = animatedDepth(id, frame, renderOrder);
   const stackSize = countWindowsInZone(geo, frame, renderOrder);
   const maxDepth = Math.max(0, stackSize - 1);
@@ -222,20 +270,6 @@ function animatedDepth(
   return before + (after - before) * easeOutCubic(t);
 }
 
-function findActiveChord(
-  frame: number
-): { chord: ActionKey; startFrame: number } | null {
-  const total = KEYCAP_FADE_IN + KEYCAP_HOLD + KEYCAP_FADE_OUT;
-  let last: { chord: ActionKey; startFrame: number } | null = null;
-  for (const beat of TIMELINE) {
-    if (beat.chord && beat.at <= frame && frame <= beat.at + total) {
-      last = { chord: beat.chord, startFrame: beat.at };
-    }
-  }
-  return last;
-}
-
-// Tile fractions → desktop pixels. Edge-to-edge: no inter-window margin.
 function geoToPx(g: Geo): { x: number; y: number; w: number; h: number } {
   return {
     x: Math.round(TILE_X + g.x * TILE_W),
@@ -270,4 +304,8 @@ function clamp(v: number, lo: number, hi: number): number {
 
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
+}
+
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }

@@ -1,8 +1,13 @@
 import React from "react";
-import { Skeleton } from "./content/Skeleton";
+import { TextEdit } from "./content/TextEdit";
+import { Chrome } from "./content/Chrome";
+import { Finder } from "./content/Finder";
+import { Ghostty } from "./content/Ghostty";
+import type { AppType } from "../timeline";
 
 type Props = {
   color: string;
+  app: AppType;
   x: number;
   y: number;
   w: number;
@@ -11,20 +16,25 @@ type Props = {
   stackOffsetY: number;
 };
 
-// Per Window.svg reference: subtle 0.4-of-365 stroke ≈ rgba(0,0,0,0.06) at 1.5px,
-// 5.8/365 corner radius ≈ 12px on a typical sized window.
 const BORDER_RADIUS = 14;
 const BORDER = "1.5px solid rgba(0,0,0,0.10)";
 
-// Traffic lights stay a fixed pixel size regardless of window dimensions.
 const LIGHT_DIAMETER = 22;
 const LIGHTS_TOP = 18;
 const LIGHTS_LEFT = 22;
 const LIGHTS_GAP = 10;
 const LIGHTS_AREA_HEIGHT = LIGHTS_TOP + LIGHT_DIAMETER + 14; // ~54px
 
+const CONTENT_BY_APP: Record<AppType, React.FC> = {
+  chrome: Chrome,
+  textedit: TextEdit,
+  finder: Finder,
+  ghostty: Ghostty,
+};
+
 export const Window: React.FC<Props> = ({
   color,
+  app,
   x,
   y,
   w,
@@ -32,6 +42,7 @@ export const Window: React.FC<Props> = ({
   opacity,
   stackOffsetY,
 }) => {
+  const Content = CONTENT_BY_APP[app];
   return (
     <div
       style={{
@@ -59,7 +70,7 @@ export const Window: React.FC<Props> = ({
           bottom: 0,
         }}
       >
-        <Skeleton />
+        <Content />
       </div>
     </div>
   );

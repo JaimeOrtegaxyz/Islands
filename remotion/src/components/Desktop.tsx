@@ -1,13 +1,16 @@
 import React from "react";
 import { AbsoluteFill, Img, staticFile } from "remotion";
+import { QUICKSAND_FAMILY, ensureQuicksand } from "../fonts";
 
-// Canvas: 2940 × 1260 white. Desktop "monitor" area centered with vertical padding.
+// Canvas: 2940 × 1260 white. Desktop sits in the upper portion; the lower
+// 220px is reserved for caption text + keycap row, so they never crowd the
+// simulated screen.
 export const CANVAS_W = 2940;
 export const CANVAS_H = 1260;
-export const DESKTOP_W = 1956; // ≈ 16:9 of 1100
-export const DESKTOP_H = 1100;
-export const DESKTOP_X = Math.round((CANVAS_W - DESKTOP_W) / 2); // 492
-export const DESKTOP_Y = Math.round((CANVAS_H - DESKTOP_H) / 2); // 80
+export const DESKTOP_W = 1742; // 16:9 of 980
+export const DESKTOP_H = 980;
+export const DESKTOP_X = Math.round((CANVAS_W - DESKTOP_W) / 2); // 599
+export const DESKTOP_Y = 60;
 
 export const MENUBAR_H = 50;
 export const TILE_X = 0;
@@ -15,9 +18,19 @@ export const TILE_Y = MENUBAR_H;
 export const TILE_W = DESKTOP_W;
 export const TILE_H = DESKTOP_H - TILE_Y;
 
-export const Desktop: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+// Lower band reserved for captions + keycaps.
+export const BAND_TOP = DESKTOP_Y + DESKTOP_H; // 1040
+export const BAND_H = CANVAS_H - BAND_TOP; // 220
+export const CAPTION_BAND_H = 88; // top portion of band
+export const KEYS_BAND_H = BAND_H - CAPTION_BAND_H; // 132
+
+export const Desktop: React.FC<{
+  appName: string;
+  opacity: number;
+  children: React.ReactNode;
+}> = ({ appName, opacity, children }) => {
+  ensureQuicksand();
+  if (opacity <= 0.001) return <AbsoluteFill style={{ background: "#FFFFFF" }} />;
   return (
     <AbsoluteFill style={{ background: "#FFFFFF" }}>
       <div
@@ -28,29 +41,30 @@ export const Desktop: React.FC<{ children: React.ReactNode }> = ({
           width: DESKTOP_W,
           height: DESKTOP_H,
           overflow: "hidden",
-          borderRadius: 8,
+          borderRadius: 10,
           boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
+          opacity,
         }}
       >
-        <Img
-          src={staticFile("wallpaper.jpeg")}
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
-        />
+          <Img
+            src={staticFile("wallpaper.png")}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
         {children}
-        <Menubar />
+        <Menubar appName={appName} />
       </div>
     </AbsoluteFill>
   );
 };
 
-const Menubar: React.FC = () => {
+const Menubar: React.FC<{ appName: string }> = ({ appName }) => {
   return (
     <div
       style={{
@@ -59,7 +73,7 @@ const Menubar: React.FC = () => {
         left: 0,
         right: 0,
         height: MENUBAR_H,
-        background: "rgba(245, 246, 248, 0.72)",
+        background: "rgba(245, 246, 248, 0.78)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: "1px solid rgba(0,0,0,0.06)",
@@ -67,20 +81,18 @@ const Menubar: React.FC = () => {
         alignItems: "center",
         padding: "0 22px",
         color: "#0B0B0F",
-        fontFamily:
-          '-apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+        fontFamily: `${QUICKSAND_FAMILY}, -apple-system, "SF Pro Text", sans-serif`,
         fontSize: 18,
         fontWeight: 500,
-        letterSpacing: 0.1,
-        gap: 24,
+        letterSpacing: 0.2,
+        gap: 22,
       }}
     >
       <AppleLogo />
-      <span style={{ fontWeight: 700 }}>Finder</span>
+      <span style={{ fontWeight: 700 }}>{appName}</span>
       <span style={{ opacity: 0.85 }}>File</span>
       <span style={{ opacity: 0.85 }}>Edit</span>
       <span style={{ opacity: 0.85 }}>View</span>
-      <span style={{ opacity: 0.85 }}>Go</span>
       <span style={{ opacity: 0.85 }}>Window</span>
       <span style={{ opacity: 0.85 }}>Help</span>
       <div style={{ flex: 1 }} />
@@ -92,7 +104,6 @@ const Menubar: React.FC = () => {
 };
 
 const AppleLogo: React.FC = () => (
-  // Apple logo SVG path, sized to look right next to 18px menubar text.
   <svg
     width="20"
     height="24"
