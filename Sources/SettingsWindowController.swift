@@ -249,19 +249,16 @@ final class SettingsWindowController: NSWindowController {
         tagline.alignment = .center
         tagline.alphaValue = 0.75
 
-        let version = WhiteLabel()
-        version.stringValue = "Version \(versionString)"
-        version.font = .quicksand(10, weight: .regular)
-        version.alignment = .center
-        version.alphaValue = 0.6
+        let credit = CreditByline(
+            prefix: "Version \(versionString)  ·  by ",
+            linkText: "Jaime Ortega",
+            url: URL(string: "https://twitter.com/jaimeortega")!
+        )
 
-        let credit = CreditByline(url: URL(string: "https://twitter.com/jaimeortega")!)
-
-        let stack = NSStackView(views: [title, tagline, version, credit])
+        let stack = NSStackView(views: [title, tagline, credit])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 3
-        stack.setCustomSpacing(7, after: version)
         stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }
@@ -1090,11 +1087,15 @@ private final class SnapPreviewView: NSView {
 
 private final class CreditByline: NSView {
     private let label = NSTextField(labelWithString: "")
+    private let prefix: String
+    private let linkText: String
     private let url: URL
     private var trackingArea: NSTrackingArea?
     private var isHovered = false
 
-    init(url: URL) {
+    init(prefix: String, linkText: String, url: URL) {
+        self.prefix = prefix
+        self.linkText = linkText
         self.url = url
         super.init(frame: .zero)
 
@@ -1119,15 +1120,16 @@ private final class CreditByline: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func updateAttributed() {
-        let prefixAlpha: CGFloat = isHovered ? 0.75 : 0.55
-        let nameAlpha: CGFloat = isHovered ? 1.0 : 0.8
+        // Prefix alpha is steady so the version text doesn't react to hover —
+        // only the underlined name lifts.
+        let nameAlpha: CGFloat = isHovered ? 1.0 : 0.85
 
         let attr = NSMutableAttributedString()
-        attr.append(NSAttributedString(string: "by ", attributes: [
+        attr.append(NSAttributedString(string: prefix, attributes: [
             .font: NSFont.quicksand(10, weight: .regular),
-            .foregroundColor: NSColor.white.withAlphaComponent(prefixAlpha),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.6),
         ]))
-        attr.append(NSAttributedString(string: "Jaime Ortega", attributes: [
+        attr.append(NSAttributedString(string: linkText, attributes: [
             .font: NSFont.quicksand(10, weight: .medium),
             .foregroundColor: NSColor.white.withAlphaComponent(nameAlpha),
             .underlineStyle: NSUnderlineStyle.single.rawValue,
