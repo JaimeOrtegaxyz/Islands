@@ -363,7 +363,7 @@ private final class BackgroundImageView: NSView {
 
     private func loadImage() {
         let url = Bundle.main.url(forResource: "settings-bg", withExtension: "png")
-            ?? URL(fileURLWithPath: "settings-bg.png")
+            ?? URL(fileURLWithPath: "Resources/settings-bg.png")
         if let image = NSImage(contentsOf: url) {
             layer?.contents = image
         }

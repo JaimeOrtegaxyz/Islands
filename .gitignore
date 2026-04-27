@@ -5,3 +5,6 @@ Islands.app/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
+
+# personal scratch / render artifacts
+stuff/
