@@ -158,7 +158,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func makeShortcutsColumn() -> NSView {
-        previewLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        previewLabel.font = .quicksand(11, weight: .regular)
         previewLabel.alphaValue = 0.75
         previewLabel.maximumNumberOfLines = 3
 
@@ -184,7 +184,7 @@ final class SettingsWindowController: NSWindowController {
     private func makeLayoutColumn() -> NSView {
         let snapGroup = fieldGroup(label: "Snap sizes", control: snapSizeSelector)
 
-        accessibilityStatusLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        accessibilityStatusLabel.font = .quicksand(12, weight: .regular)
         accessibilityStatusLabel.alphaValue = 0.9
 
         let accessibilitySpacer = NSView()
@@ -239,23 +239,23 @@ final class SettingsWindowController: NSWindowController {
 
         let title = WhiteLabel()
         title.stringValue = "Islands"
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.font = .quicksand(13, weight: .semibold)
         title.alignment = .center
         title.alphaValue = 0.95
 
         let tagline = WhiteLabel()
-        tagline.stringValue = "Native window tiling for macOS"
-        tagline.font = .systemFont(ofSize: 11, weight: .regular)
+        tagline.stringValue = "A native window manager for macOS"
+        tagline.font = .quicksand(11, weight: .regular)
         tagline.alignment = .center
         tagline.alphaValue = 0.75
 
-        let version = WhiteLabel()
-        version.stringValue = "Version \(versionString)"
-        version.font = .systemFont(ofSize: 10, weight: .regular)
-        version.alignment = .center
-        version.alphaValue = 0.6
+        let credit = CreditByline(
+            prefix: "Version \(versionString)  ·  by ",
+            linkText: "Jaime Ortega",
+            url: URL(string: "https://twitter.com/jaimeortega")!
+        )
 
-        let stack = NSStackView(views: [title, tagline, version])
+        let stack = NSStackView(views: [title, tagline, credit])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 3
@@ -266,10 +266,10 @@ final class SettingsWindowController: NSWindowController {
     private func sectionHeader(_ text: String) -> NSView {
         let label = WhiteLabel()
         label.stringValue = text.uppercased()
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.font = .quicksand(10, weight: .semibold)
 
         let attributed = NSMutableAttributedString(string: text.uppercased(), attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .font: NSFont.quicksand(10, weight: .semibold),
             .foregroundColor: NSColor.white,
             .kern: 2.4,
         ])
@@ -281,7 +281,7 @@ final class SettingsWindowController: NSWindowController {
     private func fieldGroup(label text: String, control: NSView) -> NSView {
         let label = WhiteLabel()
         label.stringValue = text
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = .quicksand(12, weight: .medium)
         label.alphaValue = 0.9
 
         let stack = NSStackView(views: [label, control])
@@ -309,9 +309,9 @@ final class SettingsWindowController: NSWindowController {
         )
 
         previewLabel.stringValue = """
-        Move/resize    \(settings.baseModifiers.symbolString) + arrows / Return / Tab
-        Centered       \(settings.centeredModeModifiers.symbolString) + arrows
-        Reverse stack  \(settings.reverseCycleModifiers.symbolString) + Tab
+        Move/resize · \(settings.baseModifiers.symbolString) + arrows / Return / Tab
+        Centered · \(settings.centeredModeModifiers.symbolString) + arrows
+        Reverse stack · \(settings.reverseCycleModifiers.symbolString) + Tab
         """
         refreshSystemState()
     }
@@ -409,7 +409,7 @@ final class OutlineButton: NSView {
         layer?.backgroundColor = NSColor.clear.cgColor
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.font = .quicksand(12, weight: .medium)
         titleLabel.alignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -500,7 +500,7 @@ private final class StyledCheckbox: NSView {
         box.addSubview(check)
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        titleLabel.font = .quicksand(12, weight: .regular)
         titleLabel.alphaValue = 0.9
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -583,13 +583,13 @@ private final class ModifierRecorderView: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        displayLabel.font = .monospacedSystemFont(ofSize: 20, weight: .medium)
+        displayLabel.font = .quicksand(20, weight: .medium)
         displayLabel.alignment = .center
         displayLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(displayLabel)
 
         hintLabel.stringValue = "Press keys…"
-        hintLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        hintLabel.font = .quicksand(11, weight: .regular)
         hintLabel.alignment = .center
         hintLabel.alphaValue = 0
         hintLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -846,7 +846,7 @@ private final class PillButton: NSView {
         layer?.borderColor = NSColor.white.withAlphaComponent(0.75).cgColor
 
         titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.font = .quicksand(12, weight: .medium)
         titleLabel.alignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -1080,5 +1080,92 @@ private final class SnapPreviewView: NSView {
             }
         }
         return path
+    }
+}
+
+// MARK: - Credit byline
+
+private final class CreditByline: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let prefix: String
+    private let linkText: String
+    private let url: URL
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false
+
+    init(prefix: String, linkText: String, url: URL) {
+        self.prefix = prefix
+        self.linkText = linkText
+        self.url = url
+        super.init(frame: .zero)
+
+        label.isEditable = false
+        label.isBezeled = false
+        label.drawsBackground = false
+        label.isSelectable = false
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+        ])
+
+        updateAttributed()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func updateAttributed() {
+        // Prefix alpha is steady so the version text doesn't react to hover —
+        // only the underlined name lifts.
+        let nameAlpha: CGFloat = isHovered ? 1.0 : 0.85
+
+        let attr = NSMutableAttributedString()
+        attr.append(NSAttributedString(string: prefix, attributes: [
+            .font: NSFont.quicksand(10, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.6),
+        ]))
+        attr.append(NSAttributedString(string: linkText, attributes: [
+            .font: NSFont.quicksand(10, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(nameAlpha),
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ]))
+        label.attributedStringValue = attr
+    }
+
+    override func updateTrackingAreas() {
+        if let existing = trackingArea { removeTrackingArea(existing) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAttributed()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAttributed()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }

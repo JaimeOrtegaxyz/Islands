@@ -10,6 +10,8 @@ build:
 	cp Resources/StatusBarIcon.svg Islands.app/Contents/Resources/
 	cp settings-bg.png Islands.app/Contents/Resources/
 	cp video-islands.mp4 Islands.app/Contents/Resources/
+	mkdir -p Islands.app/Contents/Resources/Fonts
+	cp Resources/Fonts/*.ttf Islands.app/Contents/Resources/Fonts/
 
 clean:
 	rm -rf .build Islands.app

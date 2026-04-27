@@ -55,12 +55,12 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
 
         let title = WhiteLabel()
         title.stringValue = "Islands"
-        title.font = .systemFont(ofSize: 30, weight: .semibold)
+        title.font = .quicksand(30, weight: .semibold)
         title.alignment = .center
 
         let body = WhiteLabel()
         body.stringValue = "needs Accessibility access\nto move and arrange your windows."
-        body.font = .systemFont(ofSize: 13, weight: .regular)
+        body.font = .quicksand(13, weight: .regular)
         body.alignment = .center
         body.alphaValue = 0.85
         body.maximumNumberOfLines = 0
@@ -109,7 +109,7 @@ private final class TextLinkButton: NSView {
     init(title: String) {
         super.init(frame: .zero)
         label.stringValue = title
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = .quicksand(12, weight: .medium)
         label.alphaValue = 0.65
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
