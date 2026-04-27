@@ -42,16 +42,20 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.islandsBrand.cgColor
 
+        // Small palm in the top-left corner — purely an accent / brand mark.
         let logo = NSImageView()
         logo.contentTintColor = .white
+        logo.alphaValue = 0.85
         logo.translatesAutoresizingMaskIntoConstraints = false
+        let logoHeight: CGFloat = 22
         if let url = Bundle.main.url(forResource: "StatusBarIcon", withExtension: "svg"),
            let image = NSImage(contentsOf: url) {
             let aspect = image.size.width / max(image.size.height, 1)
-            image.size = NSSize(width: 56 * aspect, height: 56)
+            image.size = NSSize(width: logoHeight * aspect, height: logoHeight)
             image.isTemplate = true
             logo.image = image
         }
+        contentView.addSubview(logo)
 
         let title = WhiteLabel()
         title.stringValue = "Islands"
@@ -71,11 +75,10 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         let notNowButton = TextLinkButton(title: "Not now")
         notNowButton.onClick = { [weak self] in self?.window?.close() }
 
-        let stack = NSStackView(views: [logo, title, body, openButton, notNowButton])
+        let stack = NSStackView(views: [title, body, openButton, notNowButton])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 14
-        stack.setCustomSpacing(16, after: logo)
         stack.setCustomSpacing(10, after: title)
         stack.setCustomSpacing(28, after: body)
         stack.setCustomSpacing(10, after: openButton)
@@ -83,8 +86,11 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
+            logo.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            logo.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+
             stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: 6),
+            stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 36),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -36),
         ])
