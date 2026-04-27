@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/islands.webp" alt="Islands logo" width="100%" />
+  <video src="islands.mp4" controls width="100%"></video>
 </p>
 
 # Islands
