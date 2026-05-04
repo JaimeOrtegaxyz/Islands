@@ -6,5 +6,8 @@ Islands.app/
 *.xcworkspace
 xcuserdata/
 
+# release artifacts
+dist/
+
 # personal scratch / render artifacts
 stuff/
