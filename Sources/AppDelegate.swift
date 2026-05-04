@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBar!
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var splashWindowController: SplashWindowController?
     private var accessibilityPollTimer: Timer?
     private var lastAccessibilityTrustedState = false
+    private var updaterController: SPUStandardUpdaterController!
 
     private static let hasSeenSplashKey = "hasSeenSplash"
 
@@ -31,9 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launchAtLoginController: launchAtLoginController
         )
         accessibilityOnboardingWindowController = AccessibilityOnboardingWindowController(accessibilityManager: accessibilityManager)
-        statusBar = StatusBar { [weak self] in
-            self?.showSettings()
-        }
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        statusBar = StatusBar(
+            updaterController: updaterController,
+            onOpenSettings: { [weak self] in
+                self?.showSettings()
+            }
+        )
 
         lastAccessibilityTrustedState = accessibilityManager.isTrusted()
         playSplashIfNeeded { [weak self] in

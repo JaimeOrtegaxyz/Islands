@@ -1,10 +1,13 @@
 import AppKit
+import Sparkle
 
 final class StatusBar {
     private var statusItem: NSStatusItem
     private let onOpenSettings: () -> Void
+    private let updaterController: SPUStandardUpdaterController
 
-    init(onOpenSettings: @escaping () -> Void) {
+    init(updaterController: SPUStandardUpdaterController, onOpenSettings: @escaping () -> Void) {
+        self.updaterController = updaterController
         self.onOpenSettings = onOpenSettings
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
@@ -12,11 +15,21 @@ final class StatusBar {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        let updatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        updatesItem.target = updaterController
+        menu.addItem(updatesItem)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Islands", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-
-        menu.items[0].target = self
 
         statusItem.menu = menu
     }

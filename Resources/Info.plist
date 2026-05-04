@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.islands.app</string>
+    <string>com.jaimeortega.app</string>
     <key>CFBundleName</key>
     <string>Islands</string>
     <key>CFBundleDisplayName</key>
@@ -24,5 +24,11 @@
     <string>Fonts/</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>Islands needs Accessibility access to move and resize windows.</string>
+    <key>SUFeedURL</key>
+    <string>https://JaimeOrtegaxyz.github.io/Islands/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string></string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
