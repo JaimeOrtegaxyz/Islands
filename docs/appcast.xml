@@ -5,5 +5,21 @@
         <link>https://jaimeortegaxyz.github.io/Islands/appcast.xml</link>
         <description>Updates for Islands — a native Swift window manager for macOS.</description>
         <language>en</language>
+        <item>
+            <title>v0.1.0-beta</title>
+            <link>https://github.com/JaimeOrtegaxyz/Islands/releases/tag/v0.1.0-beta</link>
+            <sparkle:version>0.1.0</sparkle:version>
+            <sparkle:shortVersionString>0.1.0-beta</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Mon, 04 May 2026 23:49:13 +0000</pubDate>
+            <description><![CDATA[
+                <p>First public beta. Apple Silicon only.</p>
+            ]]></description>
+            <enclosure
+                url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.1.0-beta/Islands-0.1.0-beta.zip"
+                type="application/octet-stream"
+                sparkle:edSignature="dC4wAV9teSiDWfVEBBHh5gLUPSTvgyzEmZEMUvgLOyRnsy5DYuOdlL2rK3nfSeqAnlAQtx124uCMqytI+mjlCA=="
+                length="7015339" />
+        </item>
     </channel>
 </rss>
