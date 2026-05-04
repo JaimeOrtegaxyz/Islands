@@ -25,7 +25,7 @@
     <key>NSAccessibilityUsageDescription</key>
     <string>Islands needs Accessibility access to move and resize windows.</string>
     <key>SUFeedURL</key>
-    <string>https://JaimeOrtegaxyz.github.io/Islands/appcast.xml</string>
+    <string>https://jaimeortegaxyz.github.io/Islands/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string></string>
     <key>SUEnableAutomaticChecks</key>
