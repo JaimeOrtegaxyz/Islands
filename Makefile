@@ -49,16 +49,9 @@ release: build
 		exit 1; \
 	fi
 	@mkdir -p dist
-	@echo "==> Codesigning Sparkle's nested bundles"
-	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" \
-		Islands.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc
-	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" \
-		Islands.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc
-	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" \
-		Islands.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
-	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" \
-		Islands.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app
-	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" \
+	@echo "==> Codesigning Sparkle.framework (--deep preserves Sparkle's"
+	@echo "    resource rules that seal Updater.app, Autoupdate, XPC services)"
+	codesign --force --deep --options runtime --timestamp --sign "$(SIGN_ID)" \
 		Islands.app/Contents/Frameworks/Sparkle.framework
 	@echo "==> Codesigning Islands.app with Developer ID + hardened runtime"
 	codesign --force --options runtime --timestamp \
@@ -90,7 +83,7 @@ release: build
 		echo "WARN: sign_update not found; Sparkle signature skipped."; \
 	fi
 	@echo "==> Final Gatekeeper assessment:"
-	-spctl -a -vvv -t install Islands.app
+	-spctl -a -vvv -t execute Islands.app
 	@echo ""
 	@echo "Release ready: dist/Islands-$(VERSION).zip"
 	@echo "Sparkle sig:   dist/Islands-$(VERSION).sig.txt (paste into appcast.xml entry)"
@@ -102,7 +95,7 @@ verify-signing:
 	-codesign -dv --verbose=4 Islands.app
 	@echo ""
 	@echo "==> Gatekeeper assessment:"
-	-spctl -a -vvv -t install Islands.app
+	-spctl -a -vvv -t execute Islands.app
 
 # Generate (or fetch) the Sparkle EdDSA keypair and write the public key into
 # Resources/Info.plist. Run once. The private key lives in your Keychain
