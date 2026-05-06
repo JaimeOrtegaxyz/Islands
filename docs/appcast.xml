@@ -11,15 +11,15 @@
             <sparkle:version>0.1.0</sparkle:version>
             <sparkle:shortVersionString>0.1.0-beta</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <pubDate>Mon, 04 May 2026 23:49:13 +0000</pubDate>
+            <pubDate>Wed, 06 May 2026 03:58:35 +0000</pubDate>
             <description><![CDATA[
                 <p>First public beta. Apple Silicon only.</p>
             ]]></description>
             <enclosure
-                url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.1.0-beta/Islands-0.1.0-beta.zip"
-                type="application/octet-stream"
-                sparkle:edSignature="+Hy5O951dV/KvafrWSYghjmyT/wDangQdt8MZJD/ntmiEuncwSARWLDHUxTuYj9eGyq5cAxL/fLSmeb8y3DtAQ=="
-                length="7015337" />
+                url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.1.0-beta/Islands-0.1.0-beta.dmg"
+                type="application/x-apple-diskimage"
+                sparkle:edSignature="tYd4zt+0tuWyu+hr2od/A9SYEx6jJi3H+h+yELwbWGb3AqdvfhYg46arP1AC1miHyPeMbnDjL1mqRL4huBidDg=="
+                length="7127780" />
         </item>
     </channel>
 </rss>
