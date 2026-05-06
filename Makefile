@@ -63,13 +63,23 @@ release: build
 		--sign "$(SIGN_ID)" \
 		Islands.app
 	codesign --verify --strict --verbose=2 Islands.app
-	@echo "==> Building DMG"
+	@echo "==> Building DMG with drag-to-install layout"
+	@command -v create-dmg >/dev/null 2>&1 || { \
+		echo "ERROR: create-dmg is required. Install with: brew install create-dmg"; \
+		exit 1; \
+	}
 	rm -f dist/Islands-$(VERSION).dmg
-	hdiutil create \
-		-volname "Islands" \
-		-srcfolder Islands.app \
-		-ov -format UDZO \
-		dist/Islands-$(VERSION).dmg
+	create-dmg \
+		--volname "Islands" \
+		--window-pos 200 120 \
+		--window-size 600 400 \
+		--icon-size 110 \
+		--icon "Islands.app" 165 200 \
+		--app-drop-link 435 200 \
+		--hide-extension "Islands.app" \
+		--no-internet-enable \
+		dist/Islands-$(VERSION).dmg \
+		Islands.app
 	@echo "==> Submitting DMG to Apple notary service (this can take 1-15 min)"
 	xcrun notarytool submit dist/Islands-$(VERSION).dmg \
 		--keychain-profile $(NOTARY_PROFILE) \
