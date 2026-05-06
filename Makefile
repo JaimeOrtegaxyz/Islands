@@ -38,12 +38,13 @@ clean:
 run: build
 	open Islands.app
 
-# Build, codesign with Developer ID + hardened runtime, notarize, and (if Xcode
-# stapler is available) staple. Outputs dist/Islands-<VERSION>.zip ready for
-# upload to GitHub Releases.
+# Build, codesign with Developer ID + hardened runtime, package as a DMG,
+# notarize, staple, and sign with Sparkle's EdDSA key.
 #
-# Sparkle's nested bundles (Updater.app, Autoupdate, XPC services) are signed
-# inside-out before the outer .app, as required by hardened runtime.
+# DMG (not zip) because zip extraction by Finder/Archive Utility creates
+# AppleDouble metadata files (._FILENAME) that sit in the framework root
+# unsealed, breaking spctl's strict assessment. DMGs are filesystem images
+# and preserve symlinks + xattrs faithfully regardless of how they're mounted.
 #
 # Usage: make release VERSION=0.1.0-beta
 release: build
@@ -62,35 +63,32 @@ release: build
 		--sign "$(SIGN_ID)" \
 		Islands.app
 	codesign --verify --strict --verbose=2 Islands.app
-	@echo "==> Zipping for notary submission"
-	rm -f dist/Islands-$(VERSION).zip
-	ditto -c -k --keepParent Islands.app dist/Islands-$(VERSION).zip
-	@echo "==> Submitting to Apple notary service (this can take 1-15 min)"
-	xcrun notarytool submit dist/Islands-$(VERSION).zip \
+	@echo "==> Building DMG"
+	rm -f dist/Islands-$(VERSION).dmg
+	hdiutil create \
+		-volname "Islands" \
+		-srcfolder Islands.app \
+		-ov -format UDZO \
+		dist/Islands-$(VERSION).dmg
+	@echo "==> Submitting DMG to Apple notary service (this can take 1-15 min)"
+	xcrun notarytool submit dist/Islands-$(VERSION).dmg \
 		--keychain-profile $(NOTARY_PROFILE) \
 		--wait
-	@echo "==> Notarization accepted. Attempting to staple"
-	@if xcrun --find stapler >/dev/null 2>&1; then \
-		xcrun stapler staple Islands.app && \
-		rm dist/Islands-$(VERSION).zip && \
-		ditto -c -k --keepParent Islands.app dist/Islands-$(VERSION).zip && \
-		echo "==> Stapled and re-zipped"; \
-	else \
-		echo "==> stapler not found (full Xcode required); shipping without staple."; \
-	fi
-	@echo "==> Signing zip with Sparkle EdDSA key for appcast"
+	@echo "==> Notarization accepted. Stapling DMG"
+	xcrun stapler staple dist/Islands-$(VERSION).dmg
+	@echo "==> Signing DMG with Sparkle EdDSA key for appcast"
 	@if [ -x "$(SPARKLE_BIN)/sign_update" ]; then \
-		$(SPARKLE_BIN)/sign_update dist/Islands-$(VERSION).zip > dist/Islands-$(VERSION).sig.txt && \
+		$(SPARKLE_BIN)/sign_update dist/Islands-$(VERSION).dmg > dist/Islands-$(VERSION).sig.txt && \
 		echo "==> Sparkle signature written to dist/Islands-$(VERSION).sig.txt"; \
 	else \
 		echo "WARN: sign_update not found; Sparkle signature skipped."; \
 	fi
-	@echo "==> Final Gatekeeper assessment:"
-	-spctl -a -vvv -t execute Islands.app
+	@echo "==> Final Gatekeeper assessment on DMG:"
+	-spctl -a -vvv -t open --context context:primary-signature dist/Islands-$(VERSION).dmg
 	@echo ""
-	@echo "Release ready: dist/Islands-$(VERSION).zip"
-	@echo "Sparkle sig:   dist/Islands-$(VERSION).sig.txt (paste into appcast.xml entry)"
-	@echo "Next: gh release create v$(VERSION) dist/Islands-$(VERSION).zip --title v$(VERSION) --prerelease"
+	@echo "Release ready: dist/Islands-$(VERSION).dmg"
+	@echo "Sparkle sig:   dist/Islands-$(VERSION).sig.txt"
+	@echo "Next: gh release create v$(VERSION) dist/Islands-$(VERSION).dmg --title v$(VERSION) --prerelease"
 
 # Inspect the signature on the current Islands.app bundle.
 verify-signing:
