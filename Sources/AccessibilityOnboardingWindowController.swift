@@ -42,10 +42,10 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.islandsBrand.cgColor
 
-        // Background image fills the entire content area; the brand color
-        // above it shows through any letterboxing during animations.
-        let background = NSImageView()
-        background.imageScaling = .scaleAxesIndependently
+        // Background image fills the entire content area, aspect-filled so it
+        // covers without stretching. NSImageView doesn't expose aspect-fill
+        // directly, so we use a CALayer with resizeAspectFill gravity.
+        let background = AspectFillImageView()
         background.translatesAutoresizingMaskIntoConstraints = false
         if let url = Bundle.main.url(forResource: "settings-small", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
@@ -120,6 +120,28 @@ extension NSColor {
         blue: 0xB5 / 255.0,
         alpha: 1.0
     )
+}
+
+private final class AspectFillImageView: NSView {
+    var image: NSImage? {
+        didSet { needsDisplay = true }
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer = CALayer()
+        layer?.contentsGravity = .resizeAspectFill
+        layer?.masksToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateLayer() {
+        layer?.contents = image
+    }
 }
 
 private final class TextLinkButton: NSView {

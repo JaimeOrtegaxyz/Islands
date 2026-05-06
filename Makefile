@@ -70,13 +70,22 @@ release: build
 		exit 1; \
 	}
 	rm -f dist/Islands-$(VERSION).dmg
-	# Resize the brand background to exactly the DMG window size — create-dmg
-	# expects an exact match or the layout drifts.
-	sips --resampleWidth 680 --resampleHeight 400 -s format png \
-		Resources/settings-small.png --out dist/dmg-background.png > /dev/null
+	# Build a multi-resolution TIFF for the DMG background so it stays crisp
+	# on Retina (where Finder renders the window at 2x pixel density).
+	# 1x = 680x400 px @ 72 dpi, 2x = 1360x800 px @ 144 dpi.
+	# Notes:
+	#   - sips -z forces exact dimensions (--resample* preserves aspect, wrong here)
+	#   - DPI metadata (72 vs 144) is what tells Finder these are 1x/2x reps
+	#   - tiffutil -cathidpicheck combines + verifies the relationship
+	sips -z 400 680 -s dpiHeight 72.0 -s dpiWidth 72.0 \
+		Resources/settings-small.png --out dist/dmg-bg-1x.png > /dev/null
+	sips -z 800 1360 -s dpiHeight 144.0 -s dpiWidth 144.0 \
+		Resources/settings-small.png --out dist/dmg-bg-2x.png > /dev/null
+	tiffutil -cathidpicheck dist/dmg-bg-1x.png dist/dmg-bg-2x.png \
+		-out dist/dmg-background.tiff > /dev/null
 	create-dmg \
 		--volname "Islands" \
-		--background dist/dmg-background.png \
+		--background dist/dmg-background.tiff \
 		--window-pos 200 120 \
 		--window-size 680 400 \
 		--icon-size 110 \
