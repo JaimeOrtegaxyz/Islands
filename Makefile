@@ -27,6 +27,7 @@ build:
 	cp Resources/Islands.icns Islands.app/Contents/Resources/
 	cp Resources/StatusBarIcon.svg Islands.app/Contents/Resources/
 	cp Resources/settings-bg.png Islands.app/Contents/Resources/
+	cp Resources/settings-small.png Islands.app/Contents/Resources/
 	cp Resources/video-islands.mp4 Islands.app/Contents/Resources/
 	mkdir -p Islands.app/Contents/Resources/Fonts
 	cp Resources/Fonts/*.ttf Islands.app/Contents/Resources/Fonts/
@@ -69,13 +70,18 @@ release: build
 		exit 1; \
 	}
 	rm -f dist/Islands-$(VERSION).dmg
+	# Resize the brand background to exactly the DMG window size — create-dmg
+	# expects an exact match or the layout drifts.
+	sips --resampleWidth 680 --resampleHeight 400 -s format png \
+		Resources/settings-small.png --out dist/dmg-background.png > /dev/null
 	create-dmg \
 		--volname "Islands" \
+		--background dist/dmg-background.png \
 		--window-pos 200 120 \
-		--window-size 600 400 \
+		--window-size 680 400 \
 		--icon-size 110 \
-		--icon "Islands.app" 165 200 \
-		--app-drop-link 435 200 \
+		--icon "Islands.app" 170 200 \
+		--app-drop-link 510 200 \
 		--hide-extension "Islands.app" \
 		--no-internet-enable \
 		dist/Islands-$(VERSION).dmg \

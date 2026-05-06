@@ -42,7 +42,18 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.islandsBrand.cgColor
 
-        // Small palm in the top-left corner — purely an accent / brand mark.
+        // Background image fills the entire content area; the brand color
+        // above it shows through any letterboxing during animations.
+        let background = NSImageView()
+        background.imageScaling = .scaleAxesIndependently
+        background.translatesAutoresizingMaskIntoConstraints = false
+        if let url = Bundle.main.url(forResource: "settings-small", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            background.image = image
+        }
+        contentView.addSubview(background)
+
+        // Small palm centered at the bottom — accent / brand mark.
         let logo = NSImageView()
         logo.contentTintColor = .white
         logo.alphaValue = 0.85
@@ -86,8 +97,13 @@ final class AccessibilityOnboardingWindowController: NSWindowController {
         contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            logo.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            logo.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            background.topAnchor.constraint(equalTo: contentView.topAnchor),
+            background.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            background.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            logo.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18),
+            logo.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
             stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
