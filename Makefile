@@ -20,6 +20,9 @@ build:
 	mkdir -p Islands.app/Contents/Resources
 	mkdir -p Islands.app/Contents/Frameworks
 	cp .build/release/Islands Islands.app/Contents/MacOS/
+	# swift build sets rpath to @loader_path; add the standard bundle Frameworks
+	# path so dyld can find Sparkle.framework at @rpath/Sparkle.framework/...
+	install_name_tool -add_rpath @executable_path/../Frameworks Islands.app/Contents/MacOS/Islands
 	cp Resources/Info.plist Islands.app/Contents/
 	cp Resources/Islands.icns Islands.app/Contents/Resources/
 	cp Resources/StatusBarIcon.svg Islands.app/Contents/Resources/
