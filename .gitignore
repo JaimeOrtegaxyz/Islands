@@ -9,5 +9,8 @@ xcuserdata/
 # release artifacts
 dist/
 
+# personal release/distribution notes (contains operational details)
+RELEASE_GUIDE.md
+
 # personal scratch / render artifacts
 stuff/
