@@ -72,15 +72,17 @@ release: build
 	rm -f dist/Islands-$(VERSION).dmg
 	# Build a multi-resolution TIFF for the DMG background so it stays crisp
 	# on Retina (where Finder renders the window at 2x pixel density).
-	# 1x = 680x400 px @ 72 dpi, 2x = 1360x800 px @ 144 dpi.
+	# Source: Resources/dmg-background.png at 1360x800 (already 2x of the
+	# 680x400 logical DMG window). Designed with the drag-arrow built in.
+	# 1x rep: 680x400 px @ 72 dpi. 2x rep: 1360x800 px @ 144 dpi.
 	# Notes:
 	#   - sips -z forces exact dimensions (--resample* preserves aspect, wrong here)
 	#   - DPI metadata (72 vs 144) is what tells Finder these are 1x/2x reps
 	#   - tiffutil -cathidpicheck combines + verifies the relationship
 	sips -z 400 680 -s dpiHeight 72.0 -s dpiWidth 72.0 \
-		Resources/settings-small.png --out dist/dmg-bg-1x.png > /dev/null
+		Resources/dmg-background.png --out dist/dmg-bg-1x.png > /dev/null
 	sips -z 800 1360 -s dpiHeight 144.0 -s dpiWidth 144.0 \
-		Resources/settings-small.png --out dist/dmg-bg-2x.png > /dev/null
+		Resources/dmg-background.png --out dist/dmg-bg-2x.png > /dev/null
 	tiffutil -cathidpicheck dist/dmg-bg-1x.png dist/dmg-bg-2x.png \
 		-out dist/dmg-background.tiff > /dev/null
 	create-dmg \
