@@ -6,6 +6,22 @@
         <description>Updates for Islands — a native Swift window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>v0.1.1</title>
+            <link>https://github.com/JaimeOrtegaxyz/Islands/releases/tag/v0.1.1</link>
+            <sparkle:version>0.1.1</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Mon, 11 May 2026 04:30:14 +0000</pubDate>
+            <description><![CDATA[
+                <p>Visual polish: new onboarding window background with palm accent at the bottom, refreshed DMG installer art with a drag-to-install cue, and a render fix so the onboarding gradient actually shows up.</p>
+            ]]></description>
+            <enclosure
+                url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.1.1/Islands-0.1.1.dmg"
+                type="application/x-apple-diskimage"
+                sparkle:edSignature="oSp9Wp2Waz9W0I1iHV55HbcYD8Q/TQBDe9tL/c+kIu66Lz81hpA4BpZVirS0npMeH0hBm31zbD+AKc4J/r+pBQ=="
+                length="7268875" />
+        </item>
+        <item>
             <title>v0.1.0-beta</title>
             <link>https://github.com/JaimeOrtegaxyz/Islands/releases/tag/v0.1.0-beta</link>
             <sparkle:version>0.1.0</sparkle:version>
