@@ -127,20 +127,25 @@ private final class AspectFillImageView: NSView {
         didSet { needsDisplay = true }
     }
 
-    override var wantsUpdateLayer: Bool { true }
+    override var isFlipped: Bool { false }
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer = CALayer()
-        layer?.contentsGravity = .resizeAspectFill
-        layer?.masksToBounds = true
-    }
+    override func draw(_ dirtyRect: NSRect) {
+        guard let image, image.size.width > 0, image.size.height > 0 else { return }
+        let imageAspect = image.size.width / image.size.height
+        let viewAspect = bounds.width / max(bounds.height, 1)
 
-    required init?(coder: NSCoder) { fatalError() }
+        var drawRect = bounds
+        if imageAspect > viewAspect {
+            // Image is wider than view — match view height, overflow horizontally.
+            drawRect.size.width = bounds.height * imageAspect
+            drawRect.origin.x = (bounds.width - drawRect.width) / 2
+        } else {
+            // Image is taller than view — match view width, overflow vertically.
+            drawRect.size.height = bounds.width / imageAspect
+            drawRect.origin.y = (bounds.height - drawRect.height) / 2
+        }
 
-    override func updateLayer() {
-        layer?.contents = image
+        image.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
     }
 }
 
