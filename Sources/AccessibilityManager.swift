@@ -12,6 +12,8 @@ final class AccessibilityManager {
     }
 
     func openSystemSettings() {
+        _ = isTrusted(prompt: true)
+
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
             return
         }

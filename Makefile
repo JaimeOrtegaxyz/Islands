@@ -1,25 +1,30 @@
-.PHONY: build clean run release notary-setup verify-signing sparkle-keys
+.PHONY: build clean run release release-preflight notary-setup verify-signing sparkle-keys
 
 # Signing / notarization config
 SIGN_ID         = Developer ID Application: Jesús Jaime Ortega Cruz (GU57FJMCH4)
 TEAM_ID         = GU57FJMCH4
 NOTARY_PROFILE  = islands-notary
 ENTITLEMENTS    = Resources/Islands.entitlements
+INFO_PLIST      = Resources/Info.plist
 
 # Sparkle artifacts (populated by swift build)
 SPARKLE_FW      = .build/arm64-apple-macosx/release/Sparkle.framework
 SPARKLE_BIN     = .build/artifacts/sparkle/Sparkle/bin
+SIGN_UPDATE     = $(SPARKLE_BIN)/sign_update
+ARM64_BIN       = .build/arm64-apple-macosx/release/Islands
+X86_64_BIN      = .build/x86_64-apple-macosx/release/Islands
 
-# Override on the command line: make release VERSION=0.1.0-beta
+# Override on the command line: make release VERSION=0.1.1
 VERSION ?= dev
 
 build:
 	rm -rf Islands.app
-	swift build -c release
+	swift build -c release --triple arm64-apple-macosx14.0
+	swift build -c release --triple x86_64-apple-macosx14.0
 	mkdir -p Islands.app/Contents/MacOS
 	mkdir -p Islands.app/Contents/Resources
 	mkdir -p Islands.app/Contents/Frameworks
-	cp .build/release/Islands Islands.app/Contents/MacOS/
+	lipo -create $(ARM64_BIN) $(X86_64_BIN) -output Islands.app/Contents/MacOS/Islands
 	# swift build sets rpath to @loader_path; add the standard bundle Frameworks
 	# path so dyld can find Sparkle.framework at @rpath/Sparkle.framework/...
 	install_name_tool -add_rpath @executable_path/../Frameworks Islands.app/Contents/MacOS/Islands
@@ -47,13 +52,13 @@ run: build
 # unsealed, breaking spctl's strict assessment. DMGs are filesystem images
 # and preserve symlinks + xattrs faithfully regardless of how they're mounted.
 #
-# Usage: make release VERSION=0.1.0-beta
-release: build
-	@if [ "$(VERSION)" = "dev" ]; then \
-		echo "ERROR: pass VERSION=x.y.z (e.g. make release VERSION=0.1.0-beta)"; \
+# Usage: make release VERSION=0.1.1
+release: release-preflight build
+	@mkdir -p dist
+	@if [ ! -x "$(SIGN_UPDATE)" ]; then \
+		echo "ERROR: Sparkle sign_update not found at $(SIGN_UPDATE)."; \
 		exit 1; \
 	fi
-	@mkdir -p dist
 	@echo "==> Codesigning Sparkle.framework (--deep preserves Sparkle's"
 	@echo "    resource rules that seal Updater.app, Autoupdate, XPC services)"
 	codesign --force --deep --options runtime --timestamp --sign "$(SIGN_ID)" \
@@ -97,25 +102,54 @@ release: build
 		--no-internet-enable \
 		dist/Islands-$(VERSION).dmg \
 		Islands.app
+	@echo "==> Codesigning DMG"
+	codesign --force --timestamp --sign "$(SIGN_ID)" dist/Islands-$(VERSION).dmg
 	@echo "==> Submitting DMG to Apple notary service (this can take 1-15 min)"
 	xcrun notarytool submit dist/Islands-$(VERSION).dmg \
 		--keychain-profile $(NOTARY_PROFILE) \
 		--wait
 	@echo "==> Notarization accepted. Stapling DMG"
 	xcrun stapler staple dist/Islands-$(VERSION).dmg
+	xcrun stapler validate dist/Islands-$(VERSION).dmg
 	@echo "==> Signing DMG with Sparkle EdDSA key for appcast"
-	@if [ -x "$(SPARKLE_BIN)/sign_update" ]; then \
-		$(SPARKLE_BIN)/sign_update dist/Islands-$(VERSION).dmg > dist/Islands-$(VERSION).sig.txt && \
-		echo "==> Sparkle signature written to dist/Islands-$(VERSION).sig.txt"; \
-	else \
-		echo "WARN: sign_update not found; Sparkle signature skipped."; \
-	fi
+	$(SIGN_UPDATE) dist/Islands-$(VERSION).dmg > dist/Islands-$(VERSION).sig.txt
+	@SIG=$$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' dist/Islands-$(VERSION).sig.txt); \
+	LENGTH=$$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' dist/Islands-$(VERSION).sig.txt); \
+	ACTUAL_LENGTH=$$(stat -f %z dist/Islands-$(VERSION).dmg); \
+	if [ -z "$$SIG" ]; then \
+		echo "ERROR: Sparkle signature was not written."; \
+		exit 1; \
+	fi; \
+	if [ "$$LENGTH" != "$$ACTUAL_LENGTH" ]; then \
+		echo "ERROR: Sparkle length $$LENGTH does not match DMG size $$ACTUAL_LENGTH."; \
+		exit 1; \
+	fi; \
+	$(SIGN_UPDATE) --verify dist/Islands-$(VERSION).dmg "$$SIG"
 	@echo "==> Final Gatekeeper assessment on DMG:"
-	-spctl -a -vvv -t open --context context:primary-signature dist/Islands-$(VERSION).dmg
+	spctl -a -vvv -t open --context context:primary-signature dist/Islands-$(VERSION).dmg
 	@echo ""
 	@echo "Release ready: dist/Islands-$(VERSION).dmg"
 	@echo "Sparkle sig:   dist/Islands-$(VERSION).sig.txt"
 	@echo "Next: gh release create v$(VERSION) dist/Islands-$(VERSION).dmg --title v$(VERSION) --prerelease"
+
+release-preflight:
+	@if [ "$(VERSION)" = "dev" ]; then \
+		echo "ERROR: pass VERSION=x.y.z (e.g. make release VERSION=0.1.1)"; \
+		exit 1; \
+	fi
+	@command -v create-dmg >/dev/null 2>&1 || { \
+		echo "ERROR: create-dmg is required. Install with: brew install create-dmg"; \
+		exit 1; \
+	}
+	@BUNDLE_VERSION=$$(plutil -extract CFBundleVersion raw -o - $(INFO_PLIST)); \
+	SHORT_VERSION=$$(plutil -extract CFBundleShortVersionString raw -o - $(INFO_PLIST)); \
+	if [ "$$BUNDLE_VERSION" != "$(VERSION)" ] || [ "$$SHORT_VERSION" != "$(VERSION)" ]; then \
+		echo "ERROR: $(INFO_PLIST) version mismatch."; \
+		echo "       CFBundleVersion=$$BUNDLE_VERSION"; \
+		echo "       CFBundleShortVersionString=$$SHORT_VERSION"; \
+		echo "       VERSION=$(VERSION)"; \
+		exit 1; \
+	fi
 
 # Inspect the signature on the current Islands.app bundle.
 verify-signing:

@@ -14,6 +14,7 @@
             <pubDate>Mon, 11 May 2026 04:30:14 +0000</pubDate>
             <description><![CDATA[
                 <p>Visual polish: new onboarding window background with palm accent at the bottom, refreshed DMG installer art with a drag-to-install cue, and a render fix so the onboarding gradient actually shows up.</p>
+                <p>Apple Silicon only.</p>
             ]]></description>
             <enclosure
                 url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.1.1/Islands-0.1.1.dmg"

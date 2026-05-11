@@ -24,6 +24,18 @@
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>Islands needs Accessibility access to move and resize windows.</string>
+	<key>NSUpdateSecurityPolicy</key>
+	<dict>
+		<key>AllowProcesses</key>
+		<dict>
+			<key>GU57FJMCH4</key>
+			<array>
+				<string>Autoupdate</string>
+				<string>org.sparkle-project.Sparkle.Updater</string>
+				<string>org.sparkle-project.InstallerLauncher</string>
+			</array>
+		</dict>
+	</dict>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>

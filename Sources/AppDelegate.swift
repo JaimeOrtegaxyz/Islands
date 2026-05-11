@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func evaluateAccessibility(showPromptIfNeeded: Bool) {
-        let trusted = accessibilityManager.isTrusted()
+        let trusted = accessibilityManager.isTrusted(prompt: showPromptIfNeeded)
         let wasTrusted = lastAccessibilityTrustedState
         lastAccessibilityTrustedState = trusted
 
