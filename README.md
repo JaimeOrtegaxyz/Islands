@@ -6,6 +6,14 @@
 
 `Islands` is a native Swift window manager for macOS. It lives in the menu bar, listens for global hotkeys, and moves the focused window the moment you press them — no animations, no overlays, no magic.
 
+**Download:** [Latest release](https://github.com/JaimeOrtegaxyz/Islands/releases/latest)
+
+## Requirements
+
+- macOS 14 or newer.
+- The current `v0.1.1` DMG is Apple Silicon only. Future release builds are universal for Apple Silicon and Intel Macs.
+- Accessibility permission for window management.
+
 ## What it does
 
 Press `Ctrl+Opt + ←/→/↑/↓` and the focused window snaps to that side of the screen. Press the same shortcut again and it cycles through more sizes anchored to that edge. Run out of sizes and the window overflows onto the monitor in that direction (above, below, left, right — whichever you've got).
@@ -62,14 +70,22 @@ If Accessibility permission isn't granted yet, the same window also nudges you t
 
 ## Install
 
+Download the latest `.dmg` from [GitHub Releases](https://github.com/JaimeOrtegaxyz/Islands/releases/latest), open it, and drag `Islands.app` into Applications.
+
+Grant Accessibility permission when prompted. Islands lives in the menu bar, not the Dock.
+
+## Build from source
+
 ```bash
 git clone https://github.com/JaimeOrtegaxyz/Islands ~/Documents/GitHub/Islands
 cd ~/Documents/GitHub/Islands && make
 open Islands.app
 ```
 
-Grant Accessibility permission when prompted. Lives in the menu bar, not the Dock.
-
 ## How it works
 
 Direct Accessibility API calls via `AXUIElement`. Carbon hotkeys for global keybindings. No animation or runtime overhead. Windows move instantly. As they should.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
