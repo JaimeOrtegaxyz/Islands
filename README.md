@@ -15,10 +15,7 @@ A few other cool things:
 - key combo + `Enter` maximizes the window
 - key combo + `Cmd` + arrows keeps the window centered when resizing
 - got another monitor that way? the window overflows onto it
-- drop two windows in the same spot and they accordion-stack, the back one peeks out a few pixels so you don't lose it. key combo + `Tab` rotates the stack
-- horizontal and vertical are independent. left half + top half = top-left quarter
-- every modifier is reconfigurable in Settings
-- lives in the menu bar, no Dock icon, no animations, no overlays
+- drop two windows in the same spot and they accordion-stack. Key combo + `Tab` rotates the stack
 
 **Download:** [latest release](https://github.com/JaimeOrtegaxyz/Islands/releases/latest) · macOS 14+ · Apple Silicon only (not tested on Intel, no plans to chase it)
 
@@ -38,7 +35,7 @@ Each arrow press steps through a set of fractions. Default is **sixths** (⅙ �
 
 - **Quarters**: ¼, ½, ¾
 - **Sixths**: ⅙, ⅓, ½, ⅔, ⅚
-- **Quarters + Sixths**: both, combined
+- **Quarters + Sixths**: both, combined. A bit too much imo but hey, who am I to convince you otherwise.
 
 ## Settings
 
@@ -65,7 +62,7 @@ open Islands.app
 
 ## How it works
 
-Direct Accessibility API calls via `AXUIElement`, plus Carbon for the global hotkeys (still the cleanest way to grab keys system-wide). No animation, no runtime overhead. Windows move instantly. As they should.
+Direct Accessibility API calls via `AXUIElement`, plus Carbon for the global hotkeys (still the cleanest way to grab keys system-wide). Windows move instantly. Just like that booty.
 
 ## License
 
