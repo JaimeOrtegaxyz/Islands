@@ -7,16 +7,21 @@ func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePoin
 
 final class WindowEngine {
 
+    /// Cap synchronous AX round-trips so one hung app can't freeze the main thread.
+    private static let messagingTimeout: Float = 0.25
+
     /// Get the currently focused window's AXUIElement
     func getFocusedWindow() -> AXUIElement? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(axApp, Self.messagingTimeout)
 
         var focusedWindow: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &focusedWindow)
-        guard result == .success else { return nil }
+        guard result == .success, let window = focusedWindow,
+              CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
 
-        return (focusedWindow as! AXUIElement)
+        return (window as! AXUIElement)
     }
 
     /// Get the CGWindowID for a window element
@@ -31,10 +36,11 @@ final class WindowEngine {
     func getPosition(_ window: AXUIElement) -> CGPoint? {
         var value: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &value)
-        guard result == .success else { return nil }
+        guard result == .success, let value,
+              CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
 
         var point = CGPoint.zero
-        AXValueGetValue(value as! AXValue, .cgPoint, &point)
+        guard AXValueGetValue(value as! AXValue, .cgPoint, &point) else { return nil }
         return point
     }
 
@@ -42,10 +48,11 @@ final class WindowEngine {
     func getSize(_ window: AXUIElement) -> CGSize? {
         var value: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &value)
-        guard result == .success else { return nil }
+        guard result == .success, let value,
+              CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
 
         var size = CGSize.zero
-        AXValueGetValue(value as! AXValue, .cgSize, &size)
+        guard AXValueGetValue(value as! AXValue, .cgSize, &size) else { return nil }
         return size
     }
 
@@ -100,6 +107,7 @@ final class WindowEngine {
         for app in NSWorkspace.shared.runningApplications {
             guard app.activationPolicy == .regular else { continue }
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(axApp, Self.messagingTimeout)
 
             var windowList: CFTypeRef?
             let result = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowList)
