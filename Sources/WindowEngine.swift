@@ -70,55 +70,66 @@ final class WindowEngine {
         return CGRect(origin: position, size: size)
     }
 
-    /// Set the frame of a window.
+    /// Set a window's frame.
     ///
-    /// Apps that advertise `AXEnhancedUserInterface` (Spotify, and Electron/Chromium-based apps)
-    /// apply position/size changes asynchronously and animated. That desyncs an open-loop window
-    /// manager — immediate read-backs are stale and moves appear to "fight back". The fix used by
-    /// yabai/Rectangle: temporarily disable that attribute on the owning application, set the
-    /// geometry, then restore it. Disabling it also makes the writes synchronous, so the on-screen
-    /// read-back below is reliable.
+    /// Most apps apply AX position/size directly, so they take a simple synchronous fast path —
+    /// the only added cost over a bare set is one attribute read to detect that they're well-behaved.
+    /// Apps that advertise `AXEnhancedUserInterface` (Spotify, Electron/Chromium) instead apply
+    /// geometry asynchronously and animated, which desyncs this open-loop manager (stale read-backs,
+    /// moves that "fight back"); only those pay for the workaround dance. Keeping that cost off the
+    /// common path is deliberate — see the "keep the hot path lean" convention.
     ///
-    /// Geometry is applied as size → position → size: shrinking first lets the destination position
-    /// be accepted (macOS clamps a move that would push an over-large window off-screen), and the
-    /// trailing size re-applies the intent since moving — especially across displays — can re-clamp it.
-    ///
-    /// `visibleFrame` (top-left AX coordinates, same space as `frame`) is the target screen's visible
-    /// area. When provided, the window is re-pinned to stay fully on-screen after the set: an app with
-    /// a hard minimum size (e.g. Spotify's 800×600) refuses to fit a smaller slot and would otherwise
-    /// march off the screen edge into a sliver. Pass `nil` to skip the on-screen clamp.
+    /// `visibleFrame` (top-left AX coordinates, matching `frame`) is the target screen's visible area,
+    /// used only for the min-size on-screen re-pin in the slow path; pass `nil` to skip it.
     func setFrame(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
         let axApp = getOwnerPID(window).map { appElement(for: $0) }
-        let wasEnhanced = axApp.map(isEnhancedUserInterfaceEnabled) ?? false
-        if wasEnhanced, let axApp { setEnhancedUserInterface(axApp, false) }
-        defer { if wasEnhanced, let axApp { setEnhancedUserInterface(axApp, true) } }
 
-        var position = frame.origin
-        var size = frame.size
-
-        if let sizeValue = AXValueCreate(.cgSize, &size) {
-            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
-        }
-        if let posValue = AXValueCreate(.cgPoint, &position) {
-            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
-        }
-        if let sizeValue = AXValueCreate(.cgSize, &size) {
-            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+        // Fast path: well-behaved apps obey AX directly — position then size, done.
+        guard let axApp, isEnhancedUserInterfaceEnabled(axApp) else {
+            setPosition(window, frame.origin)
+            setSize(window, frame.size)
+            return
         }
 
-        // On-screen guarantee for min-size apps: if the app clamped to a larger size than the slot,
-        // re-pin the origin so the right/bottom edge stays within the screen instead of overflowing.
-        // With enhanced UI disabled this read-back reflects the clamped size synchronously.
+        // Slow path — enhanced-UI apps only. Disable the attribute so writes land synchronously and
+        // precisely (yabai/Rectangle do the same), restoring it on every exit via defer.
+        setEnhancedUserInterface(axApp, false)
+        defer { setEnhancedUserInterface(axApp, true) }
+
+        // size → position → size: shrinking first lets the destination position be accepted (macOS
+        // clamps a move that would push an over-large window off-screen); the trailing size re-applies
+        // the intent since moving — especially across displays — can re-clamp it.
+        setSize(window, frame.size)
+        setPosition(window, frame.origin)
+        setSize(window, frame.size)
+
+        // On-screen guarantee: if the app refused to shrink below a hard minimum (e.g. Spotify's
+        // 800×600), re-pin the origin so the right/bottom edge stays within the screen instead of
+        // marching off into a sliver. With enhanced UI disabled this read-back is synchronous.
         guard let visibleFrame, let actual = getSize(window) else { return }
         let tolerance: CGFloat = 2
         guard actual.width > frame.width + tolerance || actual.height > frame.height + tolerance else { return }
 
-        var clamped = position
-        clamped.x = max(visibleFrame.minX, min(position.x, visibleFrame.maxX - actual.width))
-        clamped.y = max(visibleFrame.minY, min(position.y, visibleFrame.maxY - actual.height))
-        guard abs(clamped.x - position.x) > 0.5 || abs(clamped.y - position.y) > 0.5 else { return }
-        if let posValue = AXValueCreate(.cgPoint, &clamped) {
-            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
+        var origin = frame.origin
+        origin.x = max(visibleFrame.minX, min(origin.x, visibleFrame.maxX - actual.width))
+        origin.y = max(visibleFrame.minY, min(origin.y, visibleFrame.maxY - actual.height))
+        guard abs(origin.x - frame.origin.x) > 0.5 || abs(origin.y - frame.origin.y) > 0.5 else { return }
+        setPosition(window, origin)
+    }
+
+    /// Set a window's position (top-left, AX coordinates). Best-effort.
+    private func setPosition(_ window: AXUIElement, _ position: CGPoint) {
+        var position = position
+        if let value = AXValueCreate(.cgPoint, &position) {
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value)
+        }
+    }
+
+    /// Set a window's size. Best-effort.
+    private func setSize(_ window: AXUIElement, _ size: CGSize) {
+        var size = size
+        if let value = AXValueCreate(.cgSize, &size) {
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
         }
     }
 
