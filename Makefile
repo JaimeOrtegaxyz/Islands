@@ -2,6 +2,9 @@
 
 # Signing / notarization config
 SIGN_ID         = Developer ID Application: Jesús Jaime Ortega Cruz (GU57FJMCH4)
+# Local-dev signing identity (self-signed). Used by `build` so macOS TCC can pin a
+# stable Accessibility grant across rebuilds; `release` re-signs with SIGN_ID anyway.
+DEV_SIGN_ID     ?= Islands Dev
 TEAM_ID         = GU57FJMCH4
 NOTARY_PROFILE  = islands-notary
 ENTITLEMENTS    = Resources/Islands.entitlements
@@ -37,6 +40,17 @@ build:
 	mkdir -p Islands.app/Contents/Resources/Fonts
 	cp Resources/Fonts/*.ttf Islands.app/Contents/Resources/Fonts/
 	ditto $(SPARKLE_FW) Islands.app/Contents/Frameworks/Sparkle.framework
+	# Sign last: lipo + install_name_tool above invalidate the linker signature,
+	# leaving the bundle unsigned and un-grantable in Accessibility. Use the
+	# self-signed "$(DEV_SIGN_ID)" cert when present (stable identity -> the TCC
+	# grant survives rebuilds), else fall back to ad-hoc (must re-grant each build).
+	@if security find-identity -p codesigning 2>/dev/null | grep -q "$(DEV_SIGN_ID)"; then \
+		echo "==> Codesigning Islands.app with '$(DEV_SIGN_ID)' (stable Accessibility identity)"; \
+		codesign --force --deep --sign "$(DEV_SIGN_ID)" Islands.app; \
+	else \
+		echo "==> '$(DEV_SIGN_ID)' cert not found; ad-hoc signing (re-grant Accessibility after each rebuild)"; \
+		codesign --force --deep --sign - Islands.app; \
+	fi
 
 clean:
 	rm -rf .build Islands.app dist
