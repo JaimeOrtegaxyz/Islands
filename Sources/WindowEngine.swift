@@ -10,6 +10,14 @@ final class WindowEngine {
     /// Cap synchronous AX round-trips so one hung app can't freeze the main thread.
     private static let messagingTimeout: Float = 0.25
 
+    /// Undocumented AX attribute that apps (Spotify, Electron/Chromium) set when an assistive
+    /// client is detected; while true they apply geometry changes asynchronously/animated. See
+    /// `setFrame`, which temporarily disables it to make moves land synchronously and precisely.
+    private static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface" as CFString
+
+    /// Per-application AX elements (timeout-stamped), reused across calls and keyed by pid.
+    private var appElementCache: [pid_t: AXUIElement] = [:]
+
     /// Get the currently focused window's AXUIElement
     func getFocusedWindow() -> AXUIElement? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
@@ -62,17 +70,80 @@ final class WindowEngine {
         return CGRect(origin: position, size: size)
     }
 
-    /// Set the frame of a window (position first, then size)
-    func setFrame(_ window: AXUIElement, frame: CGRect) {
+    /// Set the frame of a window.
+    ///
+    /// Apps that advertise `AXEnhancedUserInterface` (Spotify, and Electron/Chromium-based apps)
+    /// apply position/size changes asynchronously and animated. That desyncs an open-loop window
+    /// manager — immediate read-backs are stale and moves appear to "fight back". The fix used by
+    /// yabai/Rectangle: temporarily disable that attribute on the owning application, set the
+    /// geometry, then restore it. Disabling it also makes the writes synchronous, so the on-screen
+    /// read-back below is reliable.
+    ///
+    /// Geometry is applied as size → position → size: shrinking first lets the destination position
+    /// be accepted (macOS clamps a move that would push an over-large window off-screen), and the
+    /// trailing size re-applies the intent since moving — especially across displays — can re-clamp it.
+    ///
+    /// `visibleFrame` (top-left AX coordinates, same space as `frame`) is the target screen's visible
+    /// area. When provided, the window is re-pinned to stay fully on-screen after the set: an app with
+    /// a hard minimum size (e.g. Spotify's 800×600) refuses to fit a smaller slot and would otherwise
+    /// march off the screen edge into a sliver. Pass `nil` to skip the on-screen clamp.
+    func setFrame(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
+        let axApp = getOwnerPID(window).map { appElement(for: $0) }
+        let wasEnhanced = axApp.map(isEnhancedUserInterfaceEnabled) ?? false
+        if wasEnhanced, let axApp { setEnhancedUserInterface(axApp, false) }
+        defer { if wasEnhanced, let axApp { setEnhancedUserInterface(axApp, true) } }
+
         var position = frame.origin
         var size = frame.size
 
+        if let sizeValue = AXValueCreate(.cgSize, &size) {
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+        }
         if let posValue = AXValueCreate(.cgPoint, &position) {
             AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
         }
         if let sizeValue = AXValueCreate(.cgSize, &size) {
             AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
         }
+
+        // On-screen guarantee for min-size apps: if the app clamped to a larger size than the slot,
+        // re-pin the origin so the right/bottom edge stays within the screen instead of overflowing.
+        // With enhanced UI disabled this read-back reflects the clamped size synchronously.
+        guard let visibleFrame, let actual = getSize(window) else { return }
+        let tolerance: CGFloat = 2
+        guard actual.width > frame.width + tolerance || actual.height > frame.height + tolerance else { return }
+
+        var clamped = position
+        clamped.x = max(visibleFrame.minX, min(position.x, visibleFrame.maxX - actual.width))
+        clamped.y = max(visibleFrame.minY, min(position.y, visibleFrame.maxY - actual.height))
+        guard abs(clamped.x - position.x) > 0.5 || abs(clamped.y - position.y) > 0.5 else { return }
+        if let posValue = AXValueCreate(.cgPoint, &clamped) {
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
+        }
+    }
+
+    /// Application AX element for a pid, created once and reused. Stamped with the messaging
+    /// timeout like every other application element in this file. An element for a recycled or
+    /// dead pid simply fails its (best-effort) AX calls, so the cache needs no invalidation.
+    private func appElement(for pid: pid_t) -> AXUIElement {
+        if let cached = appElementCache[pid] { return cached }
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, Self.messagingTimeout)
+        appElementCache[pid] = axApp
+        return axApp
+    }
+
+    /// Whether an application currently advertises `AXEnhancedUserInterface`. Absent / non-boolean /
+    /// error all read as `false`, so the disable/restore dance only runs when it is explicitly true.
+    private func isEnhancedUserInterfaceEnabled(_ axApp: AXUIElement) -> Bool {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(axApp, Self.enhancedUserInterfaceAttribute, &value)
+        guard result == .success, let value, CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return CFBooleanGetValue((value as! CFBoolean))
+    }
+
+    private func setEnhancedUserInterface(_ axApp: AXUIElement, _ enabled: Bool) {
+        AXUIElementSetAttributeValue(axApp, Self.enhancedUserInterfaceAttribute, enabled ? kCFBooleanTrue : kCFBooleanFalse)
     }
 
     /// Raise a window (bring to front without focusing)
