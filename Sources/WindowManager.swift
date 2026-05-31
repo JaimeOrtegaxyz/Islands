@@ -308,6 +308,12 @@ final class WindowManager {
         // or focusing a Dock-minimized window un-minimizes it. Evicting (rather than
         // keeping it parked in the zone) keeps the layout deterministic — peek insets
         // are then re-indexed over the visible members only.
+        //
+        // Intended consequence, not a bug: a minimized window leaves its accordion. If the
+        // stack is rearranged while it's away, restoring it returns it to its last position
+        // but zone-less — re-snap to rejoin. "Remembering" across minimize would have to
+        // follow a moved stack (or resurrect a closed one), breaking the expectation that a
+        // restored window comes back where it was.
         var visible: [(window: AXUIElement, id: CGWindowID)] = []
         var sawExisting = false
         for windowID in windowIDs {
