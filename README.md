@@ -70,12 +70,8 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-> Always this longing, this nostalgia
-> for tropic island we
-> have never known and yet recall
+Always this longing, this nostalgia
+for tropic island we
+have never known and yet recall
 
 <sub>— from *The Islands*, Robert Hayden (1978)</sub>
-        `   _ n, _  / '-     %^  %    % %^,  ^ ^% %." %%^    \    \ ---'`
-           /\/& \/\/ `    ^%  %^    ^%.::.  ^  .-  ^    %^^%  ",_  \
-     -----,^^^ ^^ ^     %%  ^   ^%%  :|!!|!'  " %%   %% ^%  ^% ^%%\,\-----
-```
