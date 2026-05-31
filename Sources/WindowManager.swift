@@ -255,8 +255,21 @@ final class WindowManager {
 
     private func synchronizeZoneMembership(for windowID: CGWindowID, window: AXUIElement) {
         guard var state = winState[windowID],
-              let oldZone = state.currentZone,
-              let actualFrame = engine.getFrame(window),
+              let oldZone = state.currentZone else {
+            return
+        }
+
+        // A minimized member reports a stale frame; don't reconcile against it. Evict it
+        // from the zone (consistent with applyPeekOffsets) and let the rest re-fan.
+        if engine.isMinimized(window) {
+            removeFromZone(windowID: windowID, zoneKey: oldZone)
+            state.currentZone = nil
+            winState[windowID] = state
+            applyPeekOffsets(zoneKey: oldZone, shouldFocusFront: false)
+            return
+        }
+
+        guard let actualFrame = engine.getFrame(window),
               let screenFrame = screens.screenFrame(for: actualFrame) else {
             return
         }
@@ -291,29 +304,47 @@ final class WindowManager {
     private func applyPeekOffsets(zoneKey: String, shouldFocusFront: Bool = true) {
         guard let windowIDs = zoneWindows[zoneKey] else { return }
 
-        var resolved: [(index: Int, window: AXUIElement, id: CGWindowID)] = []
-        for (index, windowID) in windowIDs.enumerated() {
-            if winState[windowID] != nil, let window = engine.windowElement(for: windowID) {
-                resolved.append((index: index, window: window, id: windowID))
+        // Resolve members, evicting any that are minimized: applying a frame, raising,
+        // or focusing a Dock-minimized window un-minimizes it. Evicting (rather than
+        // keeping it parked in the zone) keeps the layout deterministic — peek insets
+        // are then re-indexed over the visible members only.
+        var visible: [(window: AXUIElement, id: CGWindowID)] = []
+        var sawExisting = false
+        for windowID in windowIDs {
+            guard winState[windowID] != nil, let window = engine.windowElement(for: windowID) else {
+                continue
             }
+            sawExisting = true
+            if engine.isMinimized(window) {
+                removeFromZone(windowID: windowID, zoneKey: zoneKey)
+                winState[windowID]?.currentZone = nil
+                continue
+            }
+            visible.append((window: window, id: windowID))
         }
 
-        let count = resolved.count
-        guard count > 0 else {
+        // No member exists anymore (all closed) — tear the zone down.
+        guard sawExisting else {
             zoneWindows[zoneKey] = nil
             return
         }
 
-        for entry in resolved {
-            let inset = CGFloat(count - 1 - entry.index) * peekPixels
+        // Members exist but all are minimized — nothing to lay out. Don't nil the zone
+        // here; removeFromZone above already nils it if it emptied, and any still-tracked
+        // window may be re-snapped later.
+        guard !visible.isEmpty else { return }
+
+        let count = visible.count
+        for (visibleIndex, entry) in visible.enumerated() {
+            let inset = CGFloat(count - 1 - visibleIndex) * peekPixels
             applyFrame(window: entry.window, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
         }
 
-        for entry in resolved.reversed() where entry.index > 0 {
+        for (visibleIndex, entry) in visible.enumerated().reversed() where visibleIndex > 0 {
             engine.raise(entry.window)
         }
 
-        if shouldFocusFront, let front = resolved.first {
+        if shouldFocusFront, let front = visible.first {
             engine.focus(front.window)
         }
     }
@@ -596,9 +627,9 @@ final class WindowManager {
 
         zoneWindows[zoneKey] = windows
 
-        if let frontWindow = engine.windowElement(for: windows[0]) {
-            engine.focus(frontWindow)
-        }
+        // applyPeekOffsets focuses the front (first visible) member. Don't focus
+        // windows[0] directly here — after rotation it may be a minimized member,
+        // and focusing a minimized window un-minimizes it.
         applyPeekOffsets(zoneKey: zoneKey)
     }
 

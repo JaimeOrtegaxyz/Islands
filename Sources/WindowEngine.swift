@@ -55,6 +55,19 @@ final class WindowEngine {
         return CGRect(origin: position, size: size)
     }
 
+    /// Whether a window is currently minimized to the Dock (kAXMinimized).
+    ///
+    /// Read-only (a Copy, not a Set), so it does NOT restore the window — unlike
+    /// raise/focus/setFrame, which un-minimize a minimized window as a side effect.
+    /// Fail-open: absent / non-boolean / error all read as `false`, so on any doubt
+    /// we treat the window as visible and act on it normally.
+    func isMinimized(_ window: AXUIElement) -> Bool {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value)
+        guard result == .success, let value, CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return CFBooleanGetValue((value as! CFBoolean))
+    }
+
     /// Set the frame of a window (position first, then size)
     func setFrame(_ window: AXUIElement, frame: CGRect) {
         var position = frame.origin
