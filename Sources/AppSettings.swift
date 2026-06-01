@@ -1,4 +1,5 @@
 import AppKit
+import IslandsCore
 
 extension Notification.Name {
     static let settingsDidChange = Notification.Name("IslandsSettingsDidChange")
@@ -110,53 +111,6 @@ struct ModifierSet: OptionSet, Hashable {
                 return $0.rawValue < $1.rawValue
             }
             return $0.rawValue.nonzeroBitCount < $1.rawValue.nonzeroBitCount
-        }
-    }
-}
-
-enum SnapProfile: Int, CaseIterable {
-    case quarters
-    case sixths
-    case both
-
-    var displayName: String {
-        switch self {
-        case .quarters: return "Quarters"
-        case .sixths: return "Sixths"
-        case .both: return "Quarters + Sixths"
-        }
-    }
-
-    var availableFractions: [CGFloat] {
-        switch self {
-        case .quarters:
-            return [1.0 / 4, 1.0 / 2, 3.0 / 4]
-        case .sixths:
-            return [1.0 / 6, 2.0 / 6, 3.0 / 6, 4.0 / 6, 5.0 / 6]
-        case .both:
-            return [1.0 / 6, 1.0 / 4, 1.0 / 3, 1.0 / 2, 2.0 / 3, 3.0 / 4, 5.0 / 6]
-        }
-    }
-}
-
-enum PeekSizePreset: Int, CaseIterable {
-    case small
-    case medium
-    case large
-
-    var displayName: String {
-        switch self {
-        case .small: return "Small"
-        case .medium: return "Medium"
-        case .large: return "Large"
-        }
-    }
-
-    var points: CGFloat {
-        switch self {
-        case .small: return 4
-        case .medium: return 8
-        case .large: return 12
         }
     }
 }
