@@ -67,3 +67,11 @@ Direct Accessibility API calls via `AXUIElement`, plus Carbon for the global hot
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+---
+
+Always this longing, this nostalgia<br>
+for tropic island we<br>
+have never known and yet recall
+
+<sub>— from *The Islands*, Robert Hayden (1978)</sub>

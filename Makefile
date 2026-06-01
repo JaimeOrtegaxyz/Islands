@@ -1,4 +1,4 @@
-.PHONY: build clean run release release-preflight notary-setup verify-signing sparkle-keys
+.PHONY: build clean run test release release-preflight notary-setup verify-signing sparkle-keys
 
 # Signing / notarization config
 SIGN_ID         = Developer ID Application: Jesús Jaime Ortega Cruz (GU57FJMCH4)
@@ -57,6 +57,23 @@ clean:
 
 run: build
 	open Islands.app
+
+# Run the IslandsCore unit tests (swift-testing).
+#
+# With full Xcode, `swift test` finds the test frameworks on its own. Under the
+# Command Line Tools (no Xcode.app), Testing.framework and lib_TestingInterop
+# aren't on the default search/runtime paths, so we point at them explicitly —
+# but only when that layout is present, leaving plain `swift test` for Xcode/CI.
+DEV_DIR := $(shell xcode-select -p)
+ifneq ($(wildcard $(DEV_DIR)/Library/Developer/Frameworks/Testing.framework),)
+TEST_FLAGS := -Xswiftc -F -Xswiftc $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -F -Xlinker $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -rpath -Xlinker $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -rpath -Xlinker $(DEV_DIR)/Library/Developer/usr/lib
+endif
+
+test:
+	swift test $(TEST_FLAGS)
 
 # Build, codesign with Developer ID + hardened runtime, package as a DMG,
 # notarize, staple, and sign with Sparkle's EdDSA key.
