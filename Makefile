@@ -1,7 +1,10 @@
-.PHONY: build clean run release release-preflight notary-setup verify-signing sparkle-keys
+.PHONY: build clean run test release release-preflight notary-setup verify-signing sparkle-keys
 
 # Signing / notarization config
 SIGN_ID         = Developer ID Application: Jesús Jaime Ortega Cruz (GU57FJMCH4)
+# Local-dev signing identity (self-signed). Used by `build` so macOS TCC can pin a
+# stable Accessibility grant across rebuilds; `release` re-signs with SIGN_ID anyway.
+DEV_SIGN_ID     ?= Islands Dev
 TEAM_ID         = GU57FJMCH4
 NOTARY_PROFILE  = islands-notary
 ENTITLEMENTS    = Resources/Islands.entitlements
@@ -37,12 +40,40 @@ build:
 	mkdir -p Islands.app/Contents/Resources/Fonts
 	cp Resources/Fonts/*.ttf Islands.app/Contents/Resources/Fonts/
 	ditto $(SPARKLE_FW) Islands.app/Contents/Frameworks/Sparkle.framework
+	# Sign last: lipo + install_name_tool above invalidate the linker signature,
+	# leaving the bundle unsigned and un-grantable in Accessibility. Use the
+	# self-signed "$(DEV_SIGN_ID)" cert when present (stable identity -> the TCC
+	# grant survives rebuilds), else fall back to ad-hoc (must re-grant each build).
+	@if security find-identity -p codesigning 2>/dev/null | grep -q "$(DEV_SIGN_ID)"; then \
+		echo "==> Codesigning Islands.app with '$(DEV_SIGN_ID)' (stable Accessibility identity)"; \
+		codesign --force --deep --sign "$(DEV_SIGN_ID)" Islands.app; \
+	else \
+		echo "==> '$(DEV_SIGN_ID)' cert not found; ad-hoc signing (re-grant Accessibility after each rebuild)"; \
+		codesign --force --deep --sign - Islands.app; \
+	fi
 
 clean:
 	rm -rf .build Islands.app dist
 
 run: build
 	open Islands.app
+
+# Run the IslandsCore unit tests (swift-testing).
+#
+# With full Xcode, `swift test` finds the test frameworks on its own. Under the
+# Command Line Tools (no Xcode.app), Testing.framework and lib_TestingInterop
+# aren't on the default search/runtime paths, so we point at them explicitly —
+# but only when that layout is present, leaving plain `swift test` for Xcode/CI.
+DEV_DIR := $(shell xcode-select -p)
+ifneq ($(wildcard $(DEV_DIR)/Library/Developer/Frameworks/Testing.framework),)
+TEST_FLAGS := -Xswiftc -F -Xswiftc $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -F -Xlinker $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -rpath -Xlinker $(DEV_DIR)/Library/Developer/Frameworks \
+	-Xlinker -rpath -Xlinker $(DEV_DIR)/Library/Developer/usr/lib
+endif
+
+test:
+	swift test $(TEST_FLAGS)
 
 # Build, codesign with Developer ID + hardened runtime, package as a DMG,
 # notarize, staple, and sign with Sparkle's EdDSA key.

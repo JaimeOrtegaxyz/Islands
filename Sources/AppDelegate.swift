@@ -140,13 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configuration.createsNewApplicationInstance = true
 
         NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { [weak self] _, error in
-            if let error {
-                self?.hotkeyManager.setEnabled(true)
-                self?.presentRelaunchFailureAlert(message: error.localizedDescription)
-                return
-            }
+            // The completion handler runs on a background queue; all AppKit / Carbon
+            // calls below are main-thread-only, so hop back before touching them.
+            DispatchQueue.main.async {
+                if let error {
+                    self?.hotkeyManager.setEnabled(true)
+                    self?.presentRelaunchFailureAlert(message: error.localizedDescription)
+                    return
+                }
 
-            NSApp.terminate(nil)
+                NSApp.terminate(nil)
+            }
         }
     }
 

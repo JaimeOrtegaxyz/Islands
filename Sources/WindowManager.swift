@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import IslandsCore
 
 // MARK: - Data Types
 
@@ -9,76 +10,6 @@ enum CycleDirection {
 
 enum CenterDirection {
     case shrink, grow
-}
-
-struct PositionEntry {
-    let offset: CGFloat
-    let size: CGFloat
-}
-
-struct WindowState {
-    var hIdx: Int
-    var vIdx: Int
-    var hCentered: Bool = false
-    var vCentered: Bool = false
-    var hCenterIdx: Int = 1
-    var vCenterIdx: Int = 1
-    var currentZone: String?
-}
-
-private struct AxisLayout {
-    let edgePositions: [PositionEntry]
-    let centerPositions: [PositionEntry]
-    let edgeToCenter: [Int: Int]
-    let centerToLeading: [Int: Int]
-    let centerToTrailing: [Int: Int]
-    let fullEdgeIndex: Int
-
-    var maxEdgeIndex: Int {
-        edgePositions.count
-    }
-
-    static func make(for profile: SnapProfile) -> AxisLayout {
-        let fractions = profile.availableFractions
-        let fullEdgeIndex = fractions.count + 1
-
-        var edgePositions = fractions.map { PositionEntry(offset: 0, size: $0) }
-        edgePositions.append(PositionEntry(offset: 0, size: 1))
-        edgePositions.append(contentsOf: fractions.reversed().map { PositionEntry(offset: 1 - $0, size: $0) })
-
-        var centerPositions = [PositionEntry(offset: 0, size: 1)]
-        centerPositions.append(contentsOf: fractions.reversed().map { PositionEntry(offset: (1 - $0) / 2, size: $0) })
-
-        let centerIndexBySize = Dictionary(uniqueKeysWithValues: fractions.reversed().enumerated().map { ($1, $0 + 2) })
-        let leadingIndexBySize = Dictionary(uniqueKeysWithValues: fractions.enumerated().map { ($1, $0 + 1) })
-        let trailingIndexBySize = Dictionary(uniqueKeysWithValues: fractions.reversed().enumerated().map { ($1, fullEdgeIndex + $0 + 1) })
-
-        var edgeToCenter: [Int: Int] = [fullEdgeIndex: 1]
-        var centerToLeading: [Int: Int] = [1: fullEdgeIndex]
-        var centerToTrailing: [Int: Int] = [1: fullEdgeIndex]
-
-        for fraction in fractions {
-            guard let centerIndex = centerIndexBySize[fraction],
-                  let leadingIndex = leadingIndexBySize[fraction],
-                  let trailingIndex = trailingIndexBySize[fraction] else {
-                continue
-            }
-
-            edgeToCenter[leadingIndex] = centerIndex
-            edgeToCenter[trailingIndex] = centerIndex
-            centerToLeading[centerIndex] = leadingIndex
-            centerToTrailing[centerIndex] = trailingIndex
-        }
-
-        return AxisLayout(
-            edgePositions: edgePositions,
-            centerPositions: centerPositions,
-            edgeToCenter: edgeToCenter,
-            centerToLeading: centerToLeading,
-            centerToTrailing: centerToTrailing,
-            fullEdgeIndex: fullEdgeIndex
-        )
-    }
 }
 
 // MARK: - Window Manager
@@ -204,19 +135,12 @@ final class WindowManager {
     // MARK: - Frame Calculation
 
     private func frame(for state: WindowState, screenFrame: CGRect, peekInset: CGFloat = 0) -> CGRect {
-        let horizontalEntry = state.hCentered
-            ? horizontalLayout.centerPositions[state.hCenterIdx - 1]
-            : horizontalLayout.edgePositions[state.hIdx - 1]
-
-        let verticalEntry = state.vCentered
-            ? verticalLayout.centerPositions[state.vCenterIdx - 1]
-            : verticalLayout.edgePositions[state.vIdx - 1]
-
-        return CGRect(
-            x: screenFrame.origin.x + screenFrame.width * horizontalEntry.offset,
-            y: screenFrame.origin.y + screenFrame.height * verticalEntry.offset + peekInset,
-            width: screenFrame.width * horizontalEntry.size,
-            height: screenFrame.height * verticalEntry.size - peekInset
+        LayoutGeometry.frame(
+            for: state,
+            horizontal: horizontalLayout,
+            vertical: verticalLayout,
+            screenFrame: screenFrame,
+            peekInset: peekInset
         )
     }
 
@@ -234,7 +158,7 @@ final class WindowManager {
             return
         }
 
-        engine.setFrame(window, frame: frame(for: state, screenFrame: screenFrame, peekInset: peekInset))
+        engine.setFrame(window, frame: frame(for: state, screenFrame: screenFrame, peekInset: peekInset), visibleFrame: screenFrame)
     }
 
     private func peekInsetForWindow(windowID: CGWindowID, zoneKey: String) -> CGFloat {
@@ -243,7 +167,7 @@ final class WindowManager {
             return 0
         }
 
-        return CGFloat(windows.count - 1 - index) * peekPixels
+        return LayoutGeometry.peekInset(stackIndex: index, count: windows.count, peekPixels: peekPixels)
     }
 
     private func framesApproximatelyEqual(_ lhs: CGRect, _ rhs: CGRect, tolerance: CGFloat = 6) -> Bool {
@@ -342,7 +266,7 @@ final class WindowManager {
 
         let count = visible.count
         for (visibleIndex, entry) in visible.enumerated() {
-            let inset = CGFloat(count - 1 - visibleIndex) * peekPixels
+            let inset = LayoutGeometry.peekInset(stackIndex: visibleIndex, count: count, peekPixels: peekPixels)
             applyFrame(window: entry.window, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
         }
 
@@ -358,10 +282,12 @@ final class WindowManager {
     private func finishMove(window: AXUIElement, windowID: CGWindowID, oldZone: String?, targetScreen: NSScreen?) {
         if let targetScreen {
             let targetFrame = screens.visibleFrame(of: targetScreen)
+            // A transient nudge onto the destination screen carrying the window's current size;
+            // applyPeekOffsets immediately resets it to the real slot, so skip the on-screen clamp.
             engine.setFrame(window, frame: CGRect(
                 origin: CGPoint(x: targetFrame.origin.x + 10, y: targetFrame.origin.y + 10),
                 size: engine.getSize(window) ?? CGSize(width: 800, height: 600)
-            ))
+            ), visibleFrame: nil)
         }
 
         let screenID: String
@@ -544,11 +470,12 @@ final class WindowManager {
             state.hCentered = true
             state.hCenterIdx = horizontalLayout.edgeToCenter[state.hIdx] ?? 1
         } else {
+            let count = horizontalLayout.centerPositions.count
             switch direction {
             case .shrink:
-                state.hCenterIdx = state.hCenterIdx == horizontalLayout.centerPositions.count ? 1 : state.hCenterIdx + 1
+                state.hCenterIdx = LayoutGeometry.cycledIndex(state.hCenterIdx, count: count, forward: true)
             case .grow:
-                state.hCenterIdx = state.hCenterIdx == 1 ? horizontalLayout.centerPositions.count : state.hCenterIdx - 1
+                state.hCenterIdx = LayoutGeometry.cycledIndex(state.hCenterIdx, count: count, forward: false)
             }
         }
 
@@ -568,11 +495,12 @@ final class WindowManager {
             state.vCentered = true
             state.vCenterIdx = verticalLayout.edgeToCenter[state.vIdx] ?? 1
         } else {
+            let count = verticalLayout.centerPositions.count
             switch direction {
             case .shrink:
-                state.vCenterIdx = state.vCenterIdx == verticalLayout.centerPositions.count ? 1 : state.vCenterIdx + 1
+                state.vCenterIdx = LayoutGeometry.cycledIndex(state.vCenterIdx, count: count, forward: true)
             case .grow:
-                state.vCenterIdx = state.vCenterIdx == 1 ? verticalLayout.centerPositions.count : state.vCenterIdx - 1
+                state.vCenterIdx = LayoutGeometry.cycledIndex(state.vCenterIdx, count: count, forward: false)
             }
         }
 
