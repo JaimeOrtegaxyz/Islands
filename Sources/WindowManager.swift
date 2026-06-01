@@ -158,7 +158,7 @@ final class WindowManager {
             return
         }
 
-        engine.setFrame(window, frame: frame(for: state, screenFrame: screenFrame, peekInset: peekInset))
+        engine.setFrame(window, frame: frame(for: state, screenFrame: screenFrame, peekInset: peekInset), visibleFrame: screenFrame)
     }
 
     private func peekInsetForWindow(windowID: CGWindowID, zoneKey: String) -> CGFloat {
@@ -245,10 +245,12 @@ final class WindowManager {
     private func finishMove(window: AXUIElement, windowID: CGWindowID, oldZone: String?, targetScreen: NSScreen?) {
         if let targetScreen {
             let targetFrame = screens.visibleFrame(of: targetScreen)
+            // A transient nudge onto the destination screen carrying the window's current size;
+            // applyPeekOffsets immediately resets it to the real slot, so skip the on-screen clamp.
             engine.setFrame(window, frame: CGRect(
                 origin: CGPoint(x: targetFrame.origin.x + 10, y: targetFrame.origin.y + 10),
                 size: engine.getSize(window) ?? CGSize(width: 800, height: 600)
-            ))
+            ), visibleFrame: nil)
         }
 
         let screenID: String
