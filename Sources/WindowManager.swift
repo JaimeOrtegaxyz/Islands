@@ -77,6 +77,58 @@ final class WindowManager {
         return winState[windowID]!
     }
 
+    /// The snap state whose slots most closely match a window's actual frame, so an
+    /// off-grid window enters the cycle from wherever the user left it.
+    private func inferredState(from actualFrame: CGRect, screenFrame: CGRect) -> WindowState {
+        let h = LayoutGeometry.nearestSlot(
+            offset: (actualFrame.minX - screenFrame.minX) / screenFrame.width,
+            size: actualFrame.width / screenFrame.width,
+            in: horizontalLayout
+        )
+        let v = LayoutGeometry.nearestSlot(
+            offset: (actualFrame.minY - screenFrame.minY) / screenFrame.height,
+            size: actualFrame.height / screenFrame.height,
+            in: verticalLayout
+        )
+        return WindowState(
+            hIdx: h.centered ? (horizontalLayout.centerToLeading[h.index] ?? horizontalLayout.fullEdgeIndex) : h.index,
+            vIdx: v.centered ? (verticalLayout.centerToLeading[v.index] ?? verticalLayout.fullEdgeIndex) : v.index,
+            hCentered: h.centered,
+            vCentered: v.centered,
+            hCenterIdx: h.centered ? h.index : 1,
+            vCenterIdx: v.centered ? v.index : 1
+        )
+    }
+
+    /// The state a window action starts from. A window whose tracked state matches its
+    /// actual frame is on-grid and cycles normally. A window that is untracked — or was
+    /// moved/resized by hand since it was last snapped — instead gets a state inferred
+    /// from its geometry, and `onGrid: false` tells the caller the first press should
+    /// snap to that nearest slot rather than step beyond it. `onGrid: true` with an
+    /// inferred state means the user parked the window exactly on a slot, so a step
+    /// from there is never a visible no-op.
+    private func resolveState(for windowID: CGWindowID, window: AXUIElement) -> (state: WindowState, onGrid: Bool) {
+        let tracked = winState[windowID]
+
+        // Still in a zone: synchronizeZoneMembership just verified frame == slot.
+        if let tracked, tracked.currentZone != nil {
+            return (tracked, true)
+        }
+
+        guard let actualFrame = engine.getFrame(window),
+              let screenFrame = screens.screenFrame(for: actualFrame) else {
+            return (tracked ?? makeInitialState(), true)
+        }
+
+        if let tracked, framesApproximatelyEqual(actualFrame, frame(for: tracked, screenFrame: screenFrame)) {
+            return (tracked, true)
+        }
+
+        let inferred = inferredState(from: actualFrame, screenFrame: screenFrame)
+        let onGrid = framesApproximatelyEqual(actualFrame, frame(for: inferred, screenFrame: screenFrame))
+        return (inferred, onGrid)
+    }
+
     private func applyLatestSettings() {
         let settings = settingsStore.snapshot
         let oldFullIndex = horizontalLayout.fullEdgeIndex
@@ -223,6 +275,18 @@ final class WindowManager {
         applyPeekOffsets(zoneKey: liveZone, shouldFocusFront: false)
     }
 
+    /// Run `synchronizeZoneMembership` over a zone's tracked members (minus the window
+    /// being acted on), evicting any the user has moved or resized manually. Must run
+    /// before the zone's membership changes, while each member's expected peek inset
+    /// still reflects the stack as it was last laid out.
+    private func reconcileZoneMembers(zoneKey: String?, excluding excludedID: CGWindowID) {
+        guard let zoneKey, let members = zoneWindows[zoneKey] else { return }
+        for memberID in members where memberID != excludedID {
+            guard let memberWindow = engine.windowElement(for: memberID) else { continue }
+            synchronizeZoneMembership(for: memberID, window: memberWindow)
+        }
+    }
+
     // MARK: - Accordion Stacking
 
     private func applyPeekOffsets(zoneKey: String, shouldFocusFront: Bool = true) {
@@ -270,11 +334,18 @@ final class WindowManager {
             applyFrame(window: entry.window, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
         }
 
+        // Raise only when the front changed (a member joined, or Tab cycled) — the
+        // shouldFocusFront calls. Maintenance re-fans (member left, peek size change,
+        // cleanup) preserve the stack's relative order, so re-raising would only hoist
+        // the stack above unrelated windows — and bury the front member, since the loop
+        // raises back-to-front and skips index 0 on the assumption it gets focused.
+        guard shouldFocusFront else { return }
+
         for (visibleIndex, entry) in visible.enumerated().reversed() where visibleIndex > 0 {
             engine.raise(entry.window)
         }
 
-        if shouldFocusFront, let front = visible.first {
+        if let front = visible.first {
             engine.focus(front.window)
         }
     }
@@ -304,6 +375,14 @@ final class WindowManager {
         let state = winState[windowID]!
         let newZone = getZoneKey(state: state, screenID: screenID)
 
+        // Zone membership can be stale: only the focused window is synchronized on each
+        // action, so a member the user moved or resized manually would be yanked back to
+        // its old slot — possibly on another screen — when this fan re-applies frames.
+        reconcileZoneMembers(zoneKey: oldZone, excluding: windowID)
+        if newZone != oldZone {
+            reconcileZoneMembers(zoneKey: newZone, excluding: windowID)
+        }
+
         removeFromZone(windowID: windowID, zoneKey: oldZone)
         addToZone(windowID: windowID, zoneKey: newZone)
         winState[windowID]?.currentZone = newZone
@@ -321,8 +400,16 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        let resolved = resolveState(for: windowID, window: window)
+        var state = resolved.state
         let oldZone = state.currentZone
+
+        // Off-grid window: first press snaps onto the nearest slot; cycling continues from there.
+        if !resolved.onGrid {
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            return
+        }
 
         if state.hCentered {
             state.hCentered = false
@@ -356,8 +443,16 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        let resolved = resolveState(for: windowID, window: window)
+        var state = resolved.state
         let oldZone = state.currentZone
+
+        // Off-grid window: first press snaps onto the nearest slot; cycling continues from there.
+        if !resolved.onGrid {
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            return
+        }
 
         if state.hCentered {
             state.hCentered = false
@@ -391,8 +486,16 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        let resolved = resolveState(for: windowID, window: window)
+        var state = resolved.state
         let oldZone = state.currentZone
+
+        // Off-grid window: first press snaps onto the nearest slot; cycling continues from there.
+        if !resolved.onGrid {
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            return
+        }
 
         if state.vCentered {
             state.vCentered = false
@@ -426,8 +529,16 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        let resolved = resolveState(for: windowID, window: window)
+        var state = resolved.state
         let oldZone = state.currentZone
+
+        // Off-grid window: first press snaps onto the nearest slot; cycling continues from there.
+        if !resolved.onGrid {
+            winState[windowID] = state
+            finishMove(window: window, windowID: windowID, oldZone: oldZone, targetScreen: nil)
+            return
+        }
 
         if state.vCentered {
             state.vCentered = false
@@ -463,7 +574,9 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        // Center commands always step: starting from the inferred nearest slot keeps the
+        // window's rough size, and the centering itself is the visible first change.
+        var state = resolveState(for: windowID, window: window).state
         let oldZone = state.currentZone
 
         if !state.hCentered {
@@ -488,7 +601,9 @@ final class WindowManager {
               let windowID = engine.getWindowID(window) else { return }
         synchronizeZoneMembership(for: windowID, window: window)
 
-        var state = getState(for: windowID)
+        // Center commands always step: starting from the inferred nearest slot keeps the
+        // window's rough size, and the centering itself is the visible first change.
+        var state = resolveState(for: windowID, window: window).state
         let oldZone = state.currentZone
 
         if !state.vCentered {
@@ -540,13 +655,7 @@ final class WindowManager {
         guard let state = winState[windowID],
               let zoneKey = state.currentZone else { return }
 
-        if let windowIDs = zoneWindows[zoneKey] {
-            for trackedWindowID in windowIDs where trackedWindowID != windowID {
-                if let trackedWindow = engine.windowElement(for: trackedWindowID) {
-                    synchronizeZoneMembership(for: trackedWindowID, window: trackedWindow)
-                }
-            }
-        }
+        reconcileZoneMembers(zoneKey: zoneKey, excluding: windowID)
 
         guard var windows = zoneWindows[zoneKey], windows.count > 1 else { return }
 
