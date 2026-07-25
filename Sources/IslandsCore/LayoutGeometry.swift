@@ -40,6 +40,34 @@ public enum LayoutGeometry {
         CGFloat(count - 1 - stackIndex) * peekPixels
     }
 
+    /// The slot on one axis whose geometry best matches an actual window, measured in
+    /// screen fractions. Distance is `|Δoffset| + |Δsize|` over the edge slots and the
+    /// centered slots; the centered duplicate of full-size is skipped so a full-size
+    /// window resolves to the edge model. The returned 1-based index points into
+    /// `edgePositions`, or into `centerPositions` when `centered`.
+    public static func nearestSlot(offset: CGFloat, size: CGFloat, in layout: AxisLayout) -> (centered: Bool, index: Int) {
+        var best = (centered: false, index: layout.fullEdgeIndex)
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+
+        for (position, entry) in layout.edgePositions.enumerated() {
+            let distance = abs(offset - entry.offset) + abs(size - entry.size)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = (centered: false, index: position + 1)
+            }
+        }
+
+        for (position, entry) in layout.centerPositions.enumerated() where position > 0 {
+            let distance = abs(offset - entry.offset) + abs(size - entry.size)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = (centered: true, index: position + 1)
+            }
+        }
+
+        return best
+    }
+
     /// Advance a 1-based index one step around a ring of `count` slots, wrapping at
     /// the ends. `forward` goes `1 → 2 → … → count → 1`; backward goes
     /// `1 → count → … → 2 → 1`. Used to cycle centered-mode sizes.
