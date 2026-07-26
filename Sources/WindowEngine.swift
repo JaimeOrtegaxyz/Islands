@@ -18,6 +18,12 @@ final class WindowEngine {
     /// Per-application AX elements (timeout-stamped), reused across calls and keyed by pid.
     private var appElementCache: [pid_t: AXUIElement] = [:]
 
+    /// Window AX elements keyed by CGWindowID, so zone maintenance can reach a known
+    /// window without rescanning every running app's window list on each keypress.
+    /// An entry for a closed window fails its (best-effort) AX calls harmlessly for
+    /// the few seconds until the manager's cleanup calls `forgetWindowElement`.
+    private var windowElementCache: [CGWindowID: AXUIElement] = [:]
+
     /// Get the currently focused window's AXUIElement
     func getFocusedWindow() -> AXUIElement? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
@@ -37,6 +43,7 @@ final class WindowEngine {
         var windowID: CGWindowID = 0
         let result = _AXUIElementGetWindow(window, &windowID)
         guard result == .success else { return nil }
+        windowElementCache[windowID] = window
         return windowID
     }
 
@@ -197,8 +204,11 @@ final class WindowEngine {
         return pid
     }
 
-    /// Get an AXUIElement for a window by its CGWindowID, searching running apps
+    /// Get an AXUIElement for a window by its CGWindowID. Served from the cache when
+    /// possible (every window the manager tracks passed through `getWindowID` once);
+    /// the full running-apps scan is the cold-start fallback only.
     func windowElement(for targetID: CGWindowID) -> AXUIElement? {
+        if let cached = windowElementCache[targetID] { return cached }
         for app in NSWorkspace.shared.runningApplications {
             guard app.activationPolicy == .regular else { continue }
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
@@ -215,6 +225,11 @@ final class WindowEngine {
             }
         }
         return nil
+    }
+
+    /// Drop the cached element for a window known to be gone (see `windowElementCache`).
+    func forgetWindowElement(for windowID: CGWindowID) {
+        windowElementCache[windowID] = nil
     }
 
     /// Check if a CGWindowID still exists on screen
