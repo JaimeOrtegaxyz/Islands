@@ -93,7 +93,7 @@ final class WindowEngine {
     /// common path is deliberate — see the "keep the hot path lean" convention.
     ///
     /// `visibleFrame` (top-left AX coordinates, matching `frame`) is the target screen's visible area,
-    /// used only for the min-size on-screen re-pin in the slow path; pass `nil` to skip it.
+    /// used only for `repinIfOversized`; pass `nil` to skip that check.
     func setFrame(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
         let axApp = getOwnerPID(window).map { appElement(for: $0) }
 
@@ -101,6 +101,7 @@ final class WindowEngine {
         guard let axApp, isEnhancedUserInterfaceEnabled(axApp) else {
             setPosition(window, frame.origin)
             setSize(window, frame.size)
+            repinIfOversized(window, frame: frame, visibleFrame: visibleFrame)
             return
         }
 
@@ -116,10 +117,27 @@ final class WindowEngine {
         setPosition(window, frame.origin)
         setSize(window, frame.size)
 
-        // On-screen guarantee: if the app refused to shrink below a hard minimum (e.g. Spotify's
-        // 800×600), re-pin the origin so the right/bottom edge stays within the screen instead of
-        // marching off into a sliver. With enhanced UI disabled this read-back is synchronous.
-        guard let visibleFrame, let actual = getSize(window) else { return }
+        // Still inside the enhanced-UI-disabled window, so the read-back is synchronous.
+        repinIfOversized(window, frame: frame, visibleFrame: visibleFrame)
+    }
+
+    /// On-screen guarantee: an app that refuses to shrink below a hard minimum keeps the size it
+    /// wants, so re-pin its origin to keep the right/bottom edge on screen instead of letting it
+    /// march off the edge. Applies to both paths — the minimum is a property of the app's layout,
+    /// not of how it applies geometry: Finder (a plain, well-behaved app) won't go under 796pt wide
+    /// with a sidebar, which hung 76pt off-screen on a right-half snap of a 1440pt display.
+    ///
+    /// Costs one AX read (~0.07ms), and only for targets where the clamp could bite. A target flush
+    /// against the visible frame's left/top edge can't move on that axis — `max(minX, …)` returns
+    /// `minX` again — so maximize, left-half and top-row snaps skip the read entirely and stay
+    /// exactly as cheap as before. Such a window still overflows its slot, but into the screen
+    /// rather than off it, which is the best available outcome when the app won't be narrower.
+    private func repinIfOversized(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
+        guard let visibleFrame else { return }
+        let canMoveX = frame.origin.x > visibleFrame.minX
+        let canMoveY = frame.origin.y > visibleFrame.minY
+        guard canMoveX || canMoveY, let actual = getSize(window) else { return }
+
         let tolerance: CGFloat = 2
         guard actual.width > frame.width + tolerance || actual.height > frame.height + tolerance else { return }
 
