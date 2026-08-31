@@ -120,4 +120,112 @@ import Testing
             #expect(LayoutGeometry.peekInset(stackIndex: index, count: 4, peekPixels: 0) == 0, "index \(index)")
         }
     }
+
+    // MARK: Nearest slot
+
+    @Test func nearestSlotPicksCenteredWhenCloser() {
+        // Half-width window at offset 0.14: leading-half (offset 0) is 0.14 away,
+        // centered-half (offset 0.25) only 0.11 — centered wins.
+        let slot = LayoutGeometry.nearestSlot(offset: 0.14, size: 0.5, in: h)
+        #expect(slot.centered)
+        #expect(slot.index == 3)
+    }
+
+    @Test func nearestSlotEdgeOnlyIgnoresCenteredSlots() {
+        let slot = LayoutGeometry.nearestSlot(offset: 0.14, size: 0.5, in: h, includeCentered: false)
+        #expect(!slot.centered)
+        #expect(slot.index == 2)
+    }
+
+    @Test func nearestSlotFullSizeResolvesToEdgeModel() {
+        // The centered duplicate of full-size is skipped even when centered slots
+        // are allowed, so a full-size window resolves to the edge model.
+        let slot = LayoutGeometry.nearestSlot(offset: 0, size: 1, in: h)
+        #expect(!slot.centered)
+        #expect(slot.index == h.fullEdgeIndex)
+    }
+
+    // MARK: Nearest state
+
+    /// `nearestState` is the inverse of `frame(for:)` up to slot resolution: framing
+    /// any slot exactly and inferring it back must land on a state with that frame.
+    @Test func nearestStateRoundTripsEverySlotFrame() {
+        var states: [WindowState] = []
+        for hIdx in 1...h.maxEdgeIndex {
+            for vIdx in 1...v.maxEdgeIndex {
+                states.append(WindowState(hIdx: hIdx, vIdx: vIdx))
+            }
+        }
+        // Centered slots, skipping index 1 (the duplicate of full-size).
+        for hCenterIdx in 2...h.centerPositions.count {
+            var state = WindowState(hIdx: h.centerToLeading[hCenterIdx]!, vIdx: v.fullEdgeIndex)
+            state.hCentered = true
+            state.hCenterIdx = hCenterIdx
+            states.append(state)
+        }
+        for vCenterIdx in 2...v.centerPositions.count {
+            var state = WindowState(hIdx: h.fullEdgeIndex, vIdx: v.centerToLeading[vCenterIdx]!)
+            state.vCentered = true
+            state.vCenterIdx = vCenterIdx
+            states.append(state)
+        }
+
+        for state in states {
+            let original = frame(state)
+            let inferred = LayoutGeometry.nearestState(
+                for: original, horizontal: h, vertical: v, screenFrame: screen
+            )
+            let reconstructed = frame(inferred)
+            expectRect(
+                reconstructed,
+                x: original.origin.x, y: original.origin.y,
+                width: original.size.width, height: original.size.height,
+                "h\(state.hIdx) v\(state.vIdx) hC\(state.hCentered) vC\(state.vCentered)"
+            )
+        }
+    }
+
+    @Test func nearestStateCenteredMatchCarriesSameSizeEdgeIndex() {
+        // A window on centered-half must carry leading-half as its edge index, so
+        // leaving centered mode preserves its size.
+        var centeredHalf = WindowState(hIdx: 2, vIdx: v.fullEdgeIndex)
+        centeredHalf.hCentered = true
+        centeredHalf.hCenterIdx = 3
+        let inferred = LayoutGeometry.nearestState(
+            for: frame(centeredHalf), horizontal: h, vertical: v, screenFrame: screen
+        )
+        #expect(inferred.hCentered)
+        #expect(inferred.hCenterIdx == 3)
+        #expect(inferred.hIdx == 2)
+    }
+
+    @Test func nearestStateEdgeOnlyAxisNeverGoesCentered() {
+        // Slightly off centered-half: full inference picks the centered slot, but an
+        // edge-only horizontal axis (an arrow press) must stay on edge slots.
+        let nearCenter = CGRect(x: 100 + 0.14 * 1000, y: 200, width: 500, height: 800)
+        let full = LayoutGeometry.nearestState(
+            for: nearCenter, horizontal: h, vertical: v, screenFrame: screen
+        )
+        #expect(full.hCentered)
+
+        let edgeOnly = LayoutGeometry.nearestState(
+            for: nearCenter, horizontal: h, vertical: v, screenFrame: screen,
+            hIncludeCentered: false
+        )
+        #expect(!edgeOnly.hCentered)
+        #expect(edgeOnly.hIdx == 2)
+    }
+
+    // MARK: On-slot predicate
+
+    @Test func framesApproximatelyEqualHonorsTolerance() {
+        let base = CGRect(x: 0, y: 0, width: 100, height: 100)
+        #expect(LayoutGeometry.framesApproximatelyEqual(base, base))
+        #expect(LayoutGeometry.framesApproximatelyEqual(base, base.offsetBy(dx: LayoutGeometry.snapTolerance, dy: 0)))
+        #expect(!LayoutGeometry.framesApproximatelyEqual(base, base.offsetBy(dx: LayoutGeometry.snapTolerance + 0.5, dy: 0)))
+
+        let widened = CGRect(x: 0, y: 0, width: 100 + LayoutGeometry.snapTolerance + 0.5, height: 100)
+        #expect(!LayoutGeometry.framesApproximatelyEqual(base, widened))
+        #expect(LayoutGeometry.framesApproximatelyEqual(base, widened, tolerance: 10))
+    }
 }

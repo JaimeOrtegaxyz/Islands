@@ -19,9 +19,9 @@ make clean    # rm -rf .build Islands.app dist
 swift build   # fast iteration / type-checking only; does NOT produce a runnable bundle
 ```
 
-There is **no test suite** and no linter config. "Run a single test" does not apply.
+`make test` runs the `IslandsCoreTests` suite (swift-testing) covering the pure layout math in `Sources/IslandsCore`; use it — not bare `swift test`, which lacks the test frameworks under a CommandLineTools-only toolchain. There is no linter config.
 
-After changing window-management logic, the only real verification is running the app (`make run`) and exercising hotkeys — behavior depends on live Accessibility state and on-screen windows that unit tests can't model.
+After changing window-management logic, the only real verification beyond those unit tests is running the app (`make run`) and exercising hotkeys — behavior depends on live Accessibility state and on-screen windows that unit tests can't model.
 
 ## Release
 

@@ -23,6 +23,12 @@ public struct WindowState {
     public var vCenterIdx: Int
     public var currentZone: String?
 
+    /// The frame the window actually occupied after the last snap applied to it.
+    /// Apps with hard minimum sizes or size quantization (Spotify, terminals) settle
+    /// off-slot, so this is what distinguishes "the app refused our frame" from "the
+    /// user moved the window". Cleared on zone eviction; nil until first snapped.
+    public var settledFrame: CGRect?
+
     public init(
         hIdx: Int,
         vIdx: Int,
@@ -30,7 +36,8 @@ public struct WindowState {
         vCentered: Bool = false,
         hCenterIdx: Int = 1,
         vCenterIdx: Int = 1,
-        currentZone: String? = nil
+        currentZone: String? = nil,
+        settledFrame: CGRect? = nil
     ) {
         self.hIdx = hIdx
         self.vIdx = vIdx
@@ -39,6 +46,7 @@ public struct WindowState {
         self.hCenterIdx = hCenterIdx
         self.vCenterIdx = vCenterIdx
         self.currentZone = currentZone
+        self.settledFrame = settledFrame
     }
 }
 

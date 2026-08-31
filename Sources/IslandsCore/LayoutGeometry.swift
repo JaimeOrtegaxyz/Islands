@@ -45,7 +45,17 @@ public enum LayoutGeometry {
     /// centered slots; the centered duplicate of full-size is skipped so a full-size
     /// window resolves to the edge model. The returned 1-based index points into
     /// `edgePositions`, or into `centerPositions` when `centered`.
-    public static func nearestSlot(offset: CGFloat, size: CGFloat, in layout: AxisLayout) -> (centered: Bool, index: Int) {
+    ///
+    /// `includeCentered: false` restricts candidates to edge slots — used for arrow
+    /// snaps, where jumping a window toward the screen center (and into centered
+    /// mode, otherwise only entered via the center commands) would contradict the
+    /// pressed direction.
+    public static func nearestSlot(
+        offset: CGFloat,
+        size: CGFloat,
+        in layout: AxisLayout,
+        includeCentered: Bool = true
+    ) -> (centered: Bool, index: Int) {
         var best = (centered: false, index: layout.fullEdgeIndex)
         var bestDistance = CGFloat.greatestFiniteMagnitude
 
@@ -57,6 +67,8 @@ public enum LayoutGeometry {
             }
         }
 
+        guard includeCentered else { return best }
+
         for (position, entry) in layout.centerPositions.enumerated() where position > 0 {
             let distance = abs(offset - entry.offset) + abs(size - entry.size)
             if distance < bestDistance {
@@ -66,6 +78,59 @@ public enum LayoutGeometry {
         }
 
         return best
+    }
+
+    /// The full window state whose slots best match an actual frame — the inverse of
+    /// `frame(for:)`, up to slot resolution — so an off-grid window enters the cycle
+    /// from wherever the user left it. A centered match carries its same-size edge
+    /// index (`centerToLeading`), so leaving centered mode preserves the window's
+    /// size. Per-axis `includeCentered` mirrors `nearestSlot`.
+    public static func nearestState(
+        for actualFrame: CGRect,
+        horizontal: AxisLayout,
+        vertical: AxisLayout,
+        screenFrame: CGRect,
+        hIncludeCentered: Bool = true,
+        vIncludeCentered: Bool = true
+    ) -> WindowState {
+        let h = nearestSlot(
+            offset: (actualFrame.minX - screenFrame.minX) / screenFrame.width,
+            size: actualFrame.width / screenFrame.width,
+            in: horizontal,
+            includeCentered: hIncludeCentered
+        )
+        let v = nearestSlot(
+            offset: (actualFrame.minY - screenFrame.minY) / screenFrame.height,
+            size: actualFrame.height / screenFrame.height,
+            in: vertical,
+            includeCentered: vIncludeCentered
+        )
+        return WindowState(
+            hIdx: h.centered ? (horizontal.centerToLeading[h.index] ?? horizontal.fullEdgeIndex) : h.index,
+            vIdx: v.centered ? (vertical.centerToLeading[v.index] ?? vertical.fullEdgeIndex) : v.index,
+            hCentered: h.centered,
+            vCentered: v.centered,
+            hCenterIdx: h.centered ? h.index : 1,
+            vCenterIdx: v.centered ? v.index : 1
+        )
+    }
+
+    /// Tolerance for deciding a frame sits "on" a slot: generous enough for app-side
+    /// rounding (pixel alignment, toolbar chrome) without swallowing a real user move.
+    public static let snapTolerance: CGFloat = 6
+
+    /// Whether two frames coincide within `tolerance` on every component. The single
+    /// on-slot predicate shared by zone reconciliation and cycle-entry inference, so
+    /// the two paths can't drift apart.
+    public static func framesApproximatelyEqual(
+        _ lhs: CGRect,
+        _ rhs: CGRect,
+        tolerance: CGFloat = snapTolerance
+    ) -> Bool {
+        abs(lhs.origin.x - rhs.origin.x) <= tolerance
+            && abs(lhs.origin.y - rhs.origin.y) <= tolerance
+            && abs(lhs.size.width - rhs.size.width) <= tolerance
+            && abs(lhs.size.height - rhs.size.height) <= tolerance
     }
 
     /// Advance a 1-based index one step around a ring of `count` slots, wrapping at
