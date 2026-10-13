@@ -15,19 +15,18 @@ SPARKLE_FW      = .build/arm64-apple-macosx/release/Sparkle.framework
 SPARKLE_BIN     = .build/artifacts/sparkle/Sparkle/bin
 SIGN_UPDATE     = $(SPARKLE_BIN)/sign_update
 ARM64_BIN       = .build/arm64-apple-macosx/release/Islands
-X86_64_BIN      = .build/x86_64-apple-macosx/release/Islands
 
 # Override on the command line: make release VERSION=0.1.1
 VERSION ?= dev
 
 build:
 	rm -rf Islands.app
+	# Apple Silicon only. Intel isn't tested, so we don't ship an x86_64 slice.
 	swift build -c release --triple arm64-apple-macosx14.0
-	swift build -c release --triple x86_64-apple-macosx14.0
 	mkdir -p Islands.app/Contents/MacOS
 	mkdir -p Islands.app/Contents/Resources
 	mkdir -p Islands.app/Contents/Frameworks
-	lipo -create $(ARM64_BIN) $(X86_64_BIN) -output Islands.app/Contents/MacOS/Islands
+	cp $(ARM64_BIN) Islands.app/Contents/MacOS/Islands
 	# swift build sets rpath to @loader_path; add the standard bundle Frameworks
 	# path so dyld can find Sparkle.framework at @rpath/Sparkle.framework/...
 	install_name_tool -add_rpath @executable_path/../Frameworks Islands.app/Contents/MacOS/Islands
@@ -40,7 +39,7 @@ build:
 	mkdir -p Islands.app/Contents/Resources/Fonts
 	cp Resources/Fonts/*.ttf Islands.app/Contents/Resources/Fonts/
 	ditto $(SPARKLE_FW) Islands.app/Contents/Frameworks/Sparkle.framework
-	# Sign last: lipo + install_name_tool above invalidate the linker signature,
+	# Sign last: install_name_tool above invalidates the linker signature,
 	# leaving the bundle unsigned and un-grantable in Accessibility. Use the
 	# self-signed "$(DEV_SIGN_ID)" cert when present (stable identity -> the TCC
 	# grant survives rebuilds), else fall back to ad-hoc (must re-grant each build).

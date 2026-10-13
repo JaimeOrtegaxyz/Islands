@@ -13,7 +13,7 @@ It's a Swift Package Manager **executable** (not an Xcode project). All UI is pr
 The Makefile is the source of truth, not `swift build` alone — `swift build` produces a bare binary, but the app needs a bundled `Islands.app` with Info.plist, icons, fonts, and `Sparkle.framework`.
 
 ```bash
-make          # = make build: universal (arm64+x86_64) release build -> Islands.app
+make          # = make build: Apple Silicon (arm64) release build -> Islands.app
 make run      # build, then `open Islands.app`
 make clean    # rm -rf .build Islands.app dist
 swift build   # fast iteration / type-checking only; does NOT produce a runnable bundle
@@ -25,7 +25,7 @@ After changing window-management logic, the only real verification beyond those 
 
 ## Release
 
-`make release VERSION=x.y.z` does the full Developer ID codesign → DMG → Apple notarize → staple → Sparkle EdDSA sign pipeline. It requires the maintainer's signing identity and a one-time `make notary-setup`, so you generally **cannot run it** in this environment. Before a release the version must be bumped in `Resources/Info.plist` (both `CFBundleVersion` and `CFBundleShortVersionString`) — `release-preflight` aborts on mismatch. Auto-updates are served by Sparkle from `docs/appcast.xml` (published via GitHub Pages at the `SUFeedURL`). `RELEASE_GUIDE.md` is gitignored (maintainer-only operational notes).
+`make release VERSION=x.y.z` does the full Developer ID codesign → DMG → Apple notarize → staple → Sparkle EdDSA sign pipeline. It requires the maintainer's signing identity and a one-time `make notary-setup`, so you generally **cannot run it** in this environment. Before a release the version must be bumped in `Resources/Info.plist` (both `CFBundleVersion` and `CFBundleShortVersionString`) — `release-preflight` aborts on mismatch. Auto-updates are served by Sparkle from `docs/appcast.xml` (published via GitHub Pages at the `SUFeedURL`). Builds are Apple Silicon only since 0.2.0 (0.1.35 was universal), so every appcast item from 0.2.0 on needs `<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>` or Sparkle will offer Intel users an update that can't launch. `RELEASE_GUIDE.md` is gitignored (maintainer-only operational notes).
 
 ## Architecture
 
