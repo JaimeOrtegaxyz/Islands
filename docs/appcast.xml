@@ -6,6 +6,29 @@
         <description>Updates for Islands — a native Swift window manager for macOS.</description>
         <language>en</language>
         <item>
+            <title>v0.2.0</title>
+            <link>https://github.com/JaimeOrtegaxyz/Islands/releases/tag/v0.2.0</link>
+            <sparkle:version>0.2.0</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <pubDate>FILL_AT_RELEASE</pubDate>
+            <description><![CDATA[
+                <ul>
+                    <li>Snapping now starts from where your window actually is. Moved or resized one by hand? The first arrow press snaps it to the nearest size, and cycling continues from there.</li>
+                    <li>Stacks stay put: moving one stacked window no longer yanks the others back or reshuffles their order.</li>
+                    <li>Windows that refuse to shrink past a minimum size (Finder with its sidebar, Chrome) now stay fully on screen.</li>
+                    <li>Apps that round their own size (terminals, Spotify) no longer get stuck re-snapping to the same spot.</li>
+                    <li>Less work per keypress, and the auto-updater has its latest security fixes.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/JaimeOrtegaxyz/Islands/releases/download/v0.2.0/Islands-0.2.0.dmg"
+                type="application/x-apple-diskimage"
+                sparkle:edSignature="FILL_FROM_dist/Islands-0.2.0.sig.txt"
+                length="FILL_FROM_dist/Islands-0.2.0.sig.txt" />
+        </item>
+        <item>
             <title>v0.1.35</title>
             <link>https://github.com/JaimeOrtegaxyz/Islands/releases/tag/v0.1.35</link>
             <sparkle:version>0.1.35</sparkle:version>
