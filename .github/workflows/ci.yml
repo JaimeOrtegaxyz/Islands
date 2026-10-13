@@ -21,3 +21,7 @@ jobs:
         run: swift build
       - name: Test
         run: make test
+      - name: Build app bundle (Apple Silicon only)
+        run: |
+          make build
+          test "$(lipo -archs Islands.app/Contents/MacOS/Islands)" = "arm64"
