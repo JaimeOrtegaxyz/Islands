@@ -15,8 +15,10 @@
             <pubDate>FILL_AT_RELEASE</pubDate>
             <description><![CDATA[
                 <ul>
-                    <li>Snapping now starts from where your window actually is. Moved or resized one by hand? The first arrow press snaps it to the nearest size, and cycling continues from there.</li>
-                    <li>Stacks stay put: moving one stacked window no longer yanks the others back or reshuffles their order.</li>
+                    <li>Stacks are now islands: a slim tab bar above them shows each window's icon and title. Click a tab to switch, drag to reorder. Windows never move when you switch, so no more flicker.</li>
+                    <li>Prefer less on screen? Settings → Island marker → Slim shows a short row of dashes instead (replaces Peek size).</li>
+                    <li>Arrows go where you point: a window moved by hand moves the way you press.</li>
+                    <li>Islands stay put: moving one window out no longer yanks the others back.</li>
                     <li>Windows that refuse to shrink past a minimum size (Finder with its sidebar, Chrome) now stay fully on screen.</li>
                     <li>Apps that round their own size (terminals, Spotify) no longer get stuck re-snapping to the same spot.</li>
                     <li>Less work per keypress, and the auto-updater has its latest security fixes.</li>
