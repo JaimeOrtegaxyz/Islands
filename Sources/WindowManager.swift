@@ -20,6 +20,21 @@ enum ActionAxis {
     case horizontal, vertical
 }
 
+/// A directional (arrow) command.
+enum ArrowDirection {
+    case left, right, up, down
+
+    var axis: ActionAxis {
+        switch self {
+        case .left, .right: return .horizontal
+        case .up, .down: return .vertical
+        }
+    }
+
+    /// Toward increasing AX coordinates (top-left origin): right and down.
+    var isForward: Bool { self == .right || self == .down }
+}
+
 // MARK: - Window Manager
 
 final class WindowManager {
@@ -112,7 +127,9 @@ final class WindowManager {
     /// snap to that nearest slot rather than step beyond it. `onGrid: true` with an
     /// inferred state means the user parked the window exactly on a slot, so a step
     /// from there is never a visible no-op — unless a stack lives on that slot, in
-    /// which case the first press rejoins it (`shouldRejoinStack`).
+    /// which case the first press rejoins it (`shouldRejoinStack`). An off-grid window
+    /// under an arrow whose nearest-slot snap would go against the arrow also gets
+    /// `onGrid: true`: the press steps from that slot, as if the window were on it.
     ///
     /// `zoneVerified` is `synchronizeZoneMembership`'s return value: the zone
     /// fast-path is only sound when the sync actually read the frame this press.
@@ -120,7 +137,7 @@ final class WindowManager {
         for windowID: CGWindowID,
         window: AXUIElement,
         zoneVerified: Bool,
-        edgeSnapAxis: ActionAxis? = nil
+        arrow: ArrowDirection? = nil
     ) -> (state: WindowState, onGrid: Bool) {
         let tracked = winState[windowID]
 
@@ -134,36 +151,47 @@ final class WindowManager {
             return (tracked ?? makeInitialState(), true)
         }
 
-        if let tracked, framesApproximatelyEqual(actualFrame, frame(for: tracked, screenFrame: screenFrame)) {
+        if let tracked, LayoutGeometry.framesApproximatelyEqual(actualFrame, frame(for: tracked, screenFrame: screenFrame)) {
             return (tracked, !shouldRejoinStack(tracked, windowID: windowID, actualFrame: actualFrame))
         }
 
-        // The app refused or quantized our last snap (hard minimum size, line-height
-        // rounding): the window can never physically match its slot, but the user
-        // hasn't moved it — step from the tracked state instead of re-snapping to the
-        // same slot forever.
-        if let tracked, let settled = tracked.settledFrame,
-           framesApproximatelyEqual(actualFrame, settled) {
-            return (tracked, true)
-        }
-
+        // No settledFrame check here: a zoned window that an app clamps or quantizes off its
+        // slot never reaches this point — synchronizeZoneMembership already matched it against
+        // its settledFrame (isInPlace) and the zone fast path above returned. Zone-less tracked
+        // windows have had their settledFrame cleared by eviction.
         var inferred = inferredState(from: actualFrame, screenFrame: screenFrame)
         inferred.currentZone = tracked?.currentZone
-        if framesApproximatelyEqual(actualFrame, frame(for: inferred, screenFrame: screenFrame)) {
+        if LayoutGeometry.framesApproximatelyEqual(actualFrame, frame(for: inferred, screenFrame: screenFrame)) {
             return (inferred, !shouldRejoinStack(inferred, windowID: windowID, actualFrame: actualFrame))
         }
 
         // Off-grid: pick the snap target. Arrows keep their own axis on edge slots
         // (see `ActionAxis`); the cross axis still snaps to whatever is nearest.
-        guard let edgeSnapAxis else { return (inferred, false) }
+        guard let arrow else { return (inferred, false) }
         var target = inferredState(
             from: actualFrame,
             screenFrame: screenFrame,
-            hIncludeCentered: edgeSnapAxis != .horizontal,
-            vIncludeCentered: edgeSnapAxis != .vertical
+            hIncludeCentered: arrow.axis != .horizontal,
+            vIncludeCentered: arrow.axis != .vertical
         )
         target.currentZone = tracked?.currentZone
-        return (target, false)
+
+        // Snap onto the nearest slot only when that snap itself goes the way the arrow
+        // points. A window nudged just past a slot would otherwise be pulled back against
+        // the press — Right on a window hanging slightly right of the left half would land
+        // it on the left half. Otherwise the press steps from that slot, as if the window
+        // were already on it.
+        let targetFrame = frame(for: target, screenFrame: screenFrame)
+        let follows = arrow.axis == .horizontal
+            ? LayoutGeometry.snapFollowsDirection(
+                actualMin: actualFrame.minX, actualMax: actualFrame.maxX,
+                targetMin: targetFrame.minX, targetMax: targetFrame.maxX,
+                forward: arrow.isForward)
+            : LayoutGeometry.snapFollowsDirection(
+                actualMin: actualFrame.minY, actualMax: actualFrame.maxY,
+                targetMin: targetFrame.minY, targetMax: targetFrame.maxY,
+                forward: arrow.isForward)
+        return (target, !follows)
     }
 
     private func applyLatestSettings() {
@@ -508,7 +536,7 @@ final class WindowManager {
     /// zone membership, and resolve the state the action starts from. Funneling every
     /// action through here is what guarantees `resolveState` always runs against a
     /// membership `synchronizeZoneMembership` just reconciled (or knows it couldn't).
-    private func beginAction(edgeSnapAxis: ActionAxis? = nil) -> ActionContext? {
+    private func beginAction(arrow: ArrowDirection? = nil) -> ActionContext? {
         guard let window = engine.getFocusedWindow(),
               let windowID = engine.getWindowID(window) else { return nil }
         let zoneVerified = synchronizeZoneMembership(for: windowID, window: window)
@@ -516,7 +544,7 @@ final class WindowManager {
             for: windowID,
             window: window,
             zoneVerified: zoneVerified,
-            edgeSnapAxis: edgeSnapAxis
+            arrow: arrow
         )
         return ActionContext(window: window, windowID: windowID, state: resolved.state, onGrid: resolved.onGrid)
     }
@@ -529,11 +557,12 @@ final class WindowManager {
     // MARK: - Edge-snap Movement
 
     func moveLeft() {
-        guard let ctx = beginAction(edgeSnapAxis: .horizontal) else { return }
+        guard let ctx = beginAction(arrow: .left) else { return }
         var state = ctx.state
 
-        // Off-grid window: first press snaps onto the nearest slot (rejoining any
-        // stack living there); cycling continues from the next press.
+        // Off-grid window whose nearest slot lies the way the arrow points: first press
+        // snaps onto it (rejoining any stack living there); cycling continues from the
+        // next press.
         guard ctx.onGrid else { return commit(ctx, state: state) }
 
         if state.hCentered {
@@ -559,11 +588,12 @@ final class WindowManager {
     }
 
     func moveRight() {
-        guard let ctx = beginAction(edgeSnapAxis: .horizontal) else { return }
+        guard let ctx = beginAction(arrow: .right) else { return }
         var state = ctx.state
 
-        // Off-grid window: first press snaps onto the nearest slot (rejoining any
-        // stack living there); cycling continues from the next press.
+        // Off-grid window whose nearest slot lies the way the arrow points: first press
+        // snaps onto it (rejoining any stack living there); cycling continues from the
+        // next press.
         guard ctx.onGrid else { return commit(ctx, state: state) }
 
         if state.hCentered {
@@ -589,11 +619,12 @@ final class WindowManager {
     }
 
     func moveUp() {
-        guard let ctx = beginAction(edgeSnapAxis: .vertical) else { return }
+        guard let ctx = beginAction(arrow: .up) else { return }
         var state = ctx.state
 
-        // Off-grid window: first press snaps onto the nearest slot (rejoining any
-        // stack living there); cycling continues from the next press.
+        // Off-grid window whose nearest slot lies the way the arrow points: first press
+        // snaps onto it (rejoining any stack living there); cycling continues from the
+        // next press.
         guard ctx.onGrid else { return commit(ctx, state: state) }
 
         if state.vCentered {
@@ -619,11 +650,12 @@ final class WindowManager {
     }
 
     func moveDown() {
-        guard let ctx = beginAction(edgeSnapAxis: .vertical) else { return }
+        guard let ctx = beginAction(arrow: .down) else { return }
         var state = ctx.state
 
-        // Off-grid window: first press snaps onto the nearest slot (rejoining any
-        // stack living there); cycling continues from the next press.
+        // Off-grid window whose nearest slot lies the way the arrow points: first press
+        // snaps onto it (rejoining any stack living there); cycling continues from the
+        // next press.
         guard ctx.onGrid else { return commit(ctx, state: state) }
 
         if state.vCentered {

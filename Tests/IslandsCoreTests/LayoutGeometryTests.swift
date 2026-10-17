@@ -228,4 +228,59 @@ import Testing
         #expect(!LayoutGeometry.framesApproximatelyEqual(base, widened))
         #expect(LayoutGeometry.framesApproximatelyEqual(base, widened, tolerance: 10))
     }
+
+    // MARK: Arrow direction
+
+    private func follows(_ actual: CGRect, to target: CGRect, _ arrow: String) -> Bool {
+        switch arrow {
+        case "left", "right":
+            return LayoutGeometry.snapFollowsDirection(
+                actualMin: actual.minX, actualMax: actual.maxX,
+                targetMin: target.minX, targetMax: target.maxX, forward: arrow == "right")
+        default:
+            return LayoutGeometry.snapFollowsDirection(
+                actualMin: actual.minY, actualMax: actual.maxY,
+                targetMin: target.minY, targetMax: target.maxY, forward: arrow == "down")
+        }
+    }
+
+    @Test func nudgedPastQuadrantOnlySnapsBackTowardIt() {
+        // Top-left quadrant nudged 20pt right and down: its nearest edge slot is still the
+        // quadrant, but snapping there moves the window left and up — so only Left and Up
+        // snap; Right and Down must step on from the quadrant instead.
+        let quadrant = frame(WindowState(hIdx: 2, vIdx: 2))
+        let nudged = quadrant.offsetBy(dx: 20, dy: 20)
+        let target = frame(LayoutGeometry.nearestState(
+            for: nudged, horizontal: h, vertical: v, screenFrame: screen,
+            hIncludeCentered: false, vIncludeCentered: false
+        ))
+        expectRect(target, x: quadrant.minX, y: quadrant.minY, width: quadrant.width, height: quadrant.height)
+
+        #expect(follows(nudged, to: target, "left"))
+        #expect(follows(nudged, to: target, "up"))
+        #expect(!follows(nudged, to: target, "right"))
+        #expect(!follows(nudged, to: target, "down"))
+    }
+
+    @Test func snapFollowsDirectionNeedsAVisibleMoveThatWay() {
+        let slot = CGRect(x: 100, y: 200, width: 500, height: 800)
+
+        // Already on the slot along this axis (within tolerance): the snap moves nothing
+        // there, so no direction counts as followed.
+        let onAxis = slot.offsetBy(dx: LayoutGeometry.snapTolerance, dy: 0)
+        #expect(!follows(onAxis, to: slot, "left"))
+        #expect(!follows(onAxis, to: slot, "right"))
+
+        // Resized wider from the slot's left edge: the snap pulls the right edge in, which
+        // follows Left (one edge moves left, none moves right) but not Right.
+        let wider = CGRect(x: 100, y: 200, width: 550, height: 800)
+        #expect(follows(wider, to: slot, "left"))
+        #expect(!follows(wider, to: slot, "right"))
+
+        // Narrower and inset on both sides: the snap pushes the edges apart — one against
+        // each arrow — so neither direction follows.
+        let inset = CGRect(x: 150, y: 200, width: 400, height: 800)
+        #expect(!follows(inset, to: slot, "left"))
+        #expect(!follows(inset, to: slot, "right"))
+    }
 }

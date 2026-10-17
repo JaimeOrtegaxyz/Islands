@@ -115,6 +115,24 @@ public enum LayoutGeometry {
         )
     }
 
+    /// Whether snapping a window's span `actualMin…actualMax` on one axis onto the slot span
+    /// `targetMin…targetMax` visibly moves it the way an arrow press points: at least one edge
+    /// advances by more than `tolerance` and neither retreats by more than it. `forward` is
+    /// toward increasing coordinates — right, or down in top-left AX space.
+    public static func snapFollowsDirection(
+        actualMin: CGFloat,
+        actualMax: CGFloat,
+        targetMin: CGFloat,
+        targetMax: CGFloat,
+        forward: Bool,
+        tolerance: CGFloat = snapTolerance
+    ) -> Bool {
+        let sign: CGFloat = forward ? 1 : -1
+        let minMove = (targetMin - actualMin) * sign
+        let maxMove = (targetMax - actualMax) * sign
+        return min(minMove, maxMove) >= -tolerance && max(minMove, maxMove) > tolerance
+    }
+
     /// Tolerance for deciding a frame sits "on" a slot: generous enough for app-side
     /// rounding (pixel alignment, toolbar chrome) without swallowing a real user move.
     public static let snapTolerance: CGFloat = 6
