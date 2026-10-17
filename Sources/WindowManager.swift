@@ -557,14 +557,14 @@ final class WindowManager {
         }
     }
 
-    /// The slot a stack occupies, band included — from its front member's state and where it
-    /// settled, so no AX read is needed.
-    private func slotFrame(zoneKey: String) -> CGRect? {
+    /// The slot a stack occupies, band included, and its screen's visible frame — from the front
+    /// member's state and where it settled, so no AX read is needed.
+    private func slotFrame(zoneKey: String) -> (slot: CGRect, screen: CGRect)? {
         guard let frontID = zoneFront[zoneKey],
               let state = winState[frontID],
               let settled = state.settledFrame,
               let screenFrame = screens.screenFrame(for: settled) else { return nil }
-        return frame(for: state, screenFrame: screenFrame)
+        return (frame(for: state, screenFrame: screenFrame), screenFrame)
     }
 
     /// Redraw a stack's marker from its members as they are now (titles re-read), or take it
@@ -573,7 +573,7 @@ final class WindowManager {
     private func updateMarker(zoneKey: String) {
         guard let ids = zoneWindows[zoneKey], ids.count > 1,
               let frontID = zoneFront[zoneKey],
-              let slot = slotFrame(zoneKey: zoneKey) else {
+              let (slot, screenFrame) = slotFrame(zoneKey: zoneKey) else {
             markers.remove(zoneKey: zoneKey)
             return
         }
@@ -585,7 +585,15 @@ final class WindowManager {
             markers.remove(zoneKey: zoneKey)
             return
         }
-        markers.show(zoneKey: zoneKey, slot: screens.cocoaFrame(fromTopLeft: slot), members: members, frontID: frontID)
+        // Every width the snap profile can give a window on this screen: the tab strip ends on one.
+        let snapWidths = Set(horizontalLayout.edgePositions.map { $0.size * screenFrame.width }).sorted()
+        markers.show(
+            zoneKey: zoneKey,
+            slot: screens.cocoaFrame(fromTopLeft: slot),
+            snapWidths: snapWidths,
+            members: members,
+            frontID: frontID
+        )
     }
 
     /// Point the AX observer at exactly the windows in stacks.

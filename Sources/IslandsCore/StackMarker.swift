@@ -26,9 +26,9 @@ public enum StackMarkerStyle: Int, CaseIterable {
     }
 }
 
-/// Pure geometry for the stack markers, in points. Both markers sit at the stack's
-/// top-left and stop growing at a cap, so a stack spanning a whole display still gets
-/// a compact marker rather than a strip from edge to edge.
+/// Pure geometry for the stack markers, in points. Both markers sit at the stack's top-left
+/// and stay compact on wide stacks: the tab strip ends on a line of the layout grid near what
+/// its tabs need, and the dash row stops at a fixed cap.
 public enum StackMarkerLayout {
 
     // MARK: Tabs
@@ -37,17 +37,27 @@ public enum StackMarkerLayout {
     public static let tabStripInset: CGFloat = 4
     /// Padding inside the strip, around the tabs.
     public static let tabStripPadding: CGFloat = 1
-    /// No tab grows wider than this, however wide the stack.
-    public static let tabMaxWidth: CGFloat = 200
+    /// The tab width the strip aims for; the reach it picks makes the real width land near it.
+    public static let tabIdealWidth: CGFloat = 200
     /// Below this a tab shows only its icon.
     public static let tabTitleMinWidth: CGFloat = 72
 
-    /// Width of each tab in a stack of `count` windows `stackWidth` points wide: an equal
-    /// share of the strip, capped at `tabMaxWidth`.
-    public static func tabWidth(count: Int, stackWidth: CGFloat) -> CGFloat {
+    /// How far the strip reaches from the stack's left edge: of the widths the snap profile can
+    /// give a window (`snapWidths`) that fit in the stack, plus the stack's own width, the one
+    /// closest to `count` tabs at `tabIdealWidth`. So the strip always ends on a line of the
+    /// layout grid instead of stopping short partway across a slot — and the profile (quarters,
+    /// sixths, both) decides which lines there are to end on.
+    public static func tabStripReach(count: Int, stackWidth: CGFloat, snapWidths: [CGFloat]) -> CGFloat {
         guard count > 0 else { return 0 }
-        let available = stackWidth - 2 * tabStripInset - 2 * tabStripPadding
-        return max(0, min(tabMaxWidth, available / CGFloat(count)))
+        let ideal = CGFloat(count) * tabIdealWidth
+        let candidates = snapWidths.filter { $0 <= stackWidth + 0.5 }.sorted() + [stackWidth]
+        return candidates.min { abs($0 - ideal) < abs($1 - ideal) } ?? stackWidth
+    }
+
+    /// Width of each tab when the strip reaches `reach`: an equal share inside the insets.
+    public static func tabWidth(count: Int, reach: CGFloat) -> CGFloat {
+        guard count > 0 else { return 0 }
+        return max(0, (reach - 2 * tabStripInset - 2 * tabStripPadding) / CGFloat(count))
     }
 
     /// Whole strip width for `count` tabs of `tabWidth` — the strip hugs its tabs.

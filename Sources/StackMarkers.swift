@@ -30,6 +30,7 @@ final class StackMarkerController {
     private struct Marker {
         let panel: MarkerPanel
         var slot: CGRect
+        var snapWidths: [CGFloat]
         var members: [StackMarkerMember]
         var frontID: CGWindowID
     }
@@ -55,14 +56,16 @@ final class StackMarkerController {
     }
 
     /// Show or refresh a stack's marker. `slot` is the stack's whole slot (band included) in
-    /// AppKit screen coordinates. A no-op when nothing changed, so it is cheap to call often.
-    func show(zoneKey: String, slot: CGRect, members: [StackMarkerMember], frontID: CGWindowID) {
+    /// AppKit screen coordinates; `snapWidths` are the window widths the snap profile allows on
+    /// its screen, for the tab strip to end on. A no-op when nothing changed, so it is cheap to
+    /// call often.
+    func show(zoneKey: String, slot: CGRect, snapWidths: [CGFloat], members: [StackMarkerMember], frontID: CGWindowID) {
         if let existing = markers[zoneKey], existing.panel.isVisible, existing.slot == slot,
-           existing.members == members, existing.frontID == frontID {
+           existing.snapWidths == snapWidths, existing.members == members, existing.frontID == frontID {
             return
         }
         let panel = markers[zoneKey]?.panel ?? makePanel(zoneKey: zoneKey)
-        markers[zoneKey] = Marker(panel: panel, slot: slot, members: members, frontID: frontID)
+        markers[zoneKey] = Marker(panel: panel, slot: slot, snapWidths: snapWidths, members: members, frontID: frontID)
         render(zoneKey)
         if switcherZone == zoneKey, switcher.isShowing { refreshSwitcher(zoneKey) }
     }
@@ -131,7 +134,8 @@ final class StackMarkerController {
 
         switch style {
         case .tabs:
-            let tabWidth = StackMarkerLayout.tabWidth(count: entries.count, stackWidth: slot.width)
+            let reach = StackMarkerLayout.tabStripReach(count: entries.count, stackWidth: slot.width, snapWidths: marker.snapWidths)
+            let tabWidth = StackMarkerLayout.tabWidth(count: entries.count, reach: reach)
             let height = band - 2
             marker.panel.setFrame(NSRect(
                 x: slot.minX + StackMarkerLayout.tabStripInset,

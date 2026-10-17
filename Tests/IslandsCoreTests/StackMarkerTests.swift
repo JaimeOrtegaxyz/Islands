@@ -7,20 +7,41 @@ import Testing
 
     // MARK: Tabs
 
-    @Test func tabsShareANarrowStack() {
-        // A third of a 1280pt display: 427 - 2·4 inset - 2·1 padding = 417, split four ways.
-        #expect(isClose(StackMarkerLayout.tabWidth(count: 4, stackWidth: 427), 417.0 / 4))
+    /// Window widths sixths allow on a 1680pt display: every multiple of 280.
+    let sixths: [CGFloat] = [280, 560, 840, 1120, 1400, 1680]
+    let quarters: [CGFloat] = [420, 840, 1260, 1680]
+
+    /// Four tabs on a half-width stack fill it to its edge, rather than stopping 30pt short at
+    /// four 200pt tabs.
+    @Test func fourTabsFillAHalfStack() {
+        let reach = StackMarkerLayout.tabStripReach(count: 4, stackWidth: 840, snapWidths: sixths)
+        #expect(reach == 840)
+        #expect(isClose(StackMarkerLayout.tabWidth(count: 4, reach: reach), (840.0 - 10) / 4))
     }
 
-    /// A stack spanning a whole display still gets a compact strip: tabs stop at their cap.
-    @Test func tabsStopGrowingOnWideStacks() {
-        #expect(StackMarkerLayout.tabWidth(count: 3, stackWidth: 2560) == StackMarkerLayout.tabMaxWidth)
-        let strip = StackMarkerLayout.tabStripWidth(count: 3, tabWidth: StackMarkerLayout.tabMaxWidth)
-        #expect(strip == 3 * StackMarkerLayout.tabMaxWidth + 2 * StackMarkerLayout.tabStripPadding)
+    /// Fewer tabs end on an inner grid line — the strip never stops partway across a slot.
+    @Test func shortStripsEndOnAGridLine() {
+        #expect(StackMarkerLayout.tabStripReach(count: 3, stackWidth: 840, snapWidths: sixths) == 560)
+        #expect(StackMarkerLayout.tabStripReach(count: 3, stackWidth: 840, snapWidths: quarters) == 420)
+        #expect(StackMarkerLayout.tabStripReach(count: 2, stackWidth: 840, snapWidths: sixths) == 280)
+    }
+
+    /// A stack spanning the whole display still gets a compact strip, ending near what its tabs need.
+    @Test func wideStacksGetCompactStrips() {
+        #expect(StackMarkerLayout.tabStripReach(count: 3, stackWidth: 1680, snapWidths: sixths) == 560)
+        #expect(StackMarkerLayout.tabStripReach(count: 4, stackWidth: 1680, snapWidths: sixths) == 840)
+    }
+
+    @Test func stripNeverPassesTheStack() {
+        #expect(StackMarkerLayout.tabStripReach(count: 6, stackWidth: 560, snapWidths: sixths) == 560)
+        // A stack narrower than every listed width (another screen's widths) still gets its own.
+        #expect(StackMarkerLayout.tabStripReach(count: 4, stackWidth: 250, snapWidths: sixths) == 250)
+        let strip = StackMarkerLayout.tabStripWidth(count: 4, tabWidth: StackMarkerLayout.tabWidth(count: 4, reach: 840))
+        #expect(isClose(strip, 840 - 2 * StackMarkerLayout.tabStripInset))
     }
 
     @Test func narrowTabsDropTheirTitles() {
-        #expect(StackMarkerLayout.showsTabTitles(tabWidth: 104))
+        #expect(StackMarkerLayout.showsTabTitles(tabWidth: 140))
         #expect(!StackMarkerLayout.showsTabTitles(tabWidth: 69))
     }
 
