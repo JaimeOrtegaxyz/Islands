@@ -149,7 +149,16 @@ import Testing
 
     /// `nearestState` is the inverse of `frame(for:)` up to slot resolution: framing
     /// any slot exactly and inferring it back must land on a state with that frame.
-    @Test func nearestStateRoundTripsEverySlotFrame() {
+    /// Runs over every profile — the sixths ladders are where near-ties between edge
+    /// and centered slots would show up.
+    @Test(arguments: SnapProfile.allCases)
+    func nearestStateRoundTripsEverySlotFrame(_ profile: SnapProfile) {
+        let h = AxisLayout.make(for: profile)
+        let v = AxisLayout.make(for: profile)
+        func frame(_ state: WindowState) -> CGRect {
+            LayoutGeometry.frame(for: state, horizontal: h, vertical: v, screenFrame: screen)
+        }
+
         var states: [WindowState] = []
         for hIdx in 1...h.maxEdgeIndex {
             for vIdx in 1...v.maxEdgeIndex {
@@ -180,7 +189,7 @@ import Testing
                 reconstructed,
                 x: original.origin.x, y: original.origin.y,
                 width: original.size.width, height: original.size.height,
-                "h\(state.hIdx) v\(state.vIdx) hC\(state.hCentered) vC\(state.vCentered)"
+                "\(profile) h\(state.hIdx) v\(state.vIdx) hC\(state.hCentered) vC\(state.vCentered)"
             )
         }
     }
