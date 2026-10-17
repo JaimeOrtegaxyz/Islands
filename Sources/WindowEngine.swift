@@ -151,18 +151,24 @@ final class WindowEngine {
     /// `minX` again — so maximize, left-half and top-row snaps skip the read entirely and stay
     /// exactly as cheap as before. Such a window still overflows its slot, but into the screen
     /// rather than off it, which is the best available outcome when the app won't be narrower.
+    ///
+    /// Heights get a text row of slack: terminals round their height to whole rows (to the
+    /// nearest, so up to half a row over), which is quantization, not a hard minimum. Lifting such
+    /// a window would cover the peek strip of the stack member behind it; its last few points
+    /// running past the bottom edge is the lesser cost.
     private func repinIfOversized(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
         guard let visibleFrame else { return }
         let canMoveX = frame.origin.x > visibleFrame.minX
         let canMoveY = frame.origin.y > visibleFrame.minY
         guard canMoveX || canMoveY, let actual = getSize(window) else { return }
 
-        let tolerance: CGFloat = 2
-        guard actual.width > frame.width + tolerance || actual.height > frame.height + tolerance else { return }
+        let overWidth = actual.width > frame.width + 2
+        let overHeight = actual.height > frame.height + 20
+        guard overWidth || overHeight else { return }
 
         var origin = frame.origin
-        origin.x = max(visibleFrame.minX, min(origin.x, visibleFrame.maxX - actual.width))
-        origin.y = max(visibleFrame.minY, min(origin.y, visibleFrame.maxY - actual.height))
+        if overWidth { origin.x = max(visibleFrame.minX, min(origin.x, visibleFrame.maxX - actual.width)) }
+        if overHeight { origin.y = max(visibleFrame.minY, min(origin.y, visibleFrame.maxY - actual.height)) }
         guard abs(origin.x - frame.origin.x) > 0.5 || abs(origin.y - frame.origin.y) > 0.5 else { return }
         setPosition(window, origin)
     }
