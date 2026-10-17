@@ -154,8 +154,8 @@ final class WindowEngine {
     ///
     /// Heights get a text row of slack: terminals round their height to whole rows (to the
     /// nearest, so up to half a row over), which is quantization, not a hard minimum. Lifting such
-    /// a window would cover the peek strip of the stack member behind it; its last few points
-    /// running past the bottom edge is the lesser cost.
+    /// a window would push it into the band above a stack where the marker is drawn; its last few
+    /// points running past the bottom edge is the lesser cost.
     private func repinIfOversized(_ window: AXUIElement, frame: CGRect, visibleFrame: CGRect?) {
         guard let visibleFrame else { return }
         let canMoveX = frame.origin.x > visibleFrame.minX
@@ -218,18 +218,38 @@ final class WindowEngine {
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     }
 
-    /// Focus a window: raise it and activate its owning application
+    /// Bring `window` to the front and give it focus. A stack's members all share one frame, so
+    /// putting the new front on top is the whole job — the windows behind never move.
+    ///
+    /// A raised window of an inactive app lands just below the active app's key window (here,
+    /// the outgoing front), so for another app's window the raise only queues it; activating the
+    /// app, with `window` made main first, is what brings it up. Activation lands asynchronously
+    /// (~100–150ms), in one step, so there is nothing in between to flicker.
     func focus(_ window: AXUIElement) {
-        if let pid = getOwnerPID(window),
-           let app = NSRunningApplication(processIdentifier: pid) {
-            _ = app.activate()
-        }
-
-        // Best effort: make the specific target window the app's active window,
-        // not just any previously focused window from the same process.
         AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-        AXUIElementSetAttributeValue(window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         raise(window)
+        if let pid = getOwnerPID(window), NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
+            NSRunningApplication(processIdentifier: pid)?.activate()
+        }
+        AXUIElementSetAttributeValue(window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    }
+
+    /// A window's title, or an empty string when it has none or can't be read.
+    func title(of window: AXUIElement) -> String {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &value)
+        guard result == .success, let title = value as? String else { return "" }
+        return title
+    }
+
+    /// Normal-layer on-screen window IDs, front to back, from one window-list copy.
+    func onScreenWindowOrder() -> [CGWindowID] {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[CFString: Any]] ?? []
+        return list.compactMap { entry in
+            guard (entry[kCGWindowLayer] as? Int) == 0 else { return nil }
+            return entry[kCGWindowNumber] as? CGWindowID
+        }
     }
 
     /// Get the PID of the application that owns a window

@@ -2,7 +2,7 @@ import CoreGraphics
 import Testing
 @testable import IslandsCore
 
-/// Tests for `LayoutGeometry` — the pure frame math and accordion peek fan-out.
+/// Tests for `LayoutGeometry` — the pure frame math and the stack band inset.
 @Suite struct LayoutGeometryTests {
 
     // A non-origin screen so any dropped `screenFrame.origin` term shows up.
@@ -10,8 +10,8 @@ import Testing
     let h = AxisLayout.make(for: .quarters)
     let v = AxisLayout.make(for: .quarters)
 
-    private func frame(_ state: WindowState, peek: CGFloat = 0) -> CGRect {
-        LayoutGeometry.frame(for: state, horizontal: h, vertical: v, screenFrame: screen, peekInset: peek)
+    private func frame(_ state: WindowState, inset: CGFloat = 0) -> CGRect {
+        LayoutGeometry.frame(for: state, horizontal: h, vertical: v, screenFrame: screen, topInset: inset)
     }
 
     // MARK: Frame geometry
@@ -64,60 +64,36 @@ import Testing
         expectRect(frame(state), x: 100, y: 400, width: 1000, height: 400)
     }
 
-    // MARK: Peek inset
+    // MARK: Stack inset
 
-    @Test func peekInsetShiftsDownAndTrimsHeight() {
+    @Test func topInsetShiftsDownAndTrimsHeight() {
         let state = WindowState(hIdx: h.fullEdgeIndex, vIdx: v.fullEdgeIndex)
-        expectRect(frame(state, peek: 8), x: 100, y: 208, width: 1000, height: 792)
+        expectRect(frame(state, inset: 20), x: 100, y: 220, width: 1000, height: 780)
     }
 
-    /// Peek touches only the vertical axis: x and width are invariant; y rises by the
+    /// The inset touches only the vertical axis: x and width are invariant; y rises by the
     /// inset and height drops by it, for any state.
     @Test(arguments: [
         WindowState(hIdx: 2, vIdx: 2),
         WindowState(hIdx: 6, vIdx: 6),
         WindowState(hIdx: 1, vIdx: 7),
     ])
-    func peekAffectsOnlyVerticalAxis(_ state: WindowState) {
-        let peek: CGFloat = 10
+    func topInsetAffectsOnlyVerticalAxis(_ state: WindowState) {
+        let inset: CGFloat = 10
         let base = frame(state)
-        let peeked = frame(state, peek: peek)
-        #expect(isClose(peeked.origin.x, base.origin.x), "x invariant")
-        #expect(isClose(peeked.size.width, base.size.width), "width invariant")
-        #expect(isClose(peeked.origin.y, base.origin.y + peek), "y shifted")
-        #expect(isClose(peeked.size.height, base.size.height - peek), "height trimmed")
+        let insetFrame = frame(state, inset: inset)
+        #expect(isClose(insetFrame.origin.x, base.origin.x), "x invariant")
+        #expect(isClose(insetFrame.size.width, base.size.width), "width invariant")
+        #expect(isClose(insetFrame.origin.y, base.origin.y + inset), "y shifted")
+        #expect(isClose(insetFrame.size.height, base.size.height - inset), "height trimmed")
     }
 
-    // MARK: Fan-out
-
-    @Test func peekInsetSingleMemberHasNoInset() {
-        #expect(LayoutGeometry.peekInset(stackIndex: 0, count: 1, peekPixels: 8) == 0)
-    }
-
-    @Test func peekInsetFanOut() {
-        let peek = PeekSizePreset.medium.points // 8
-        #expect(LayoutGeometry.peekInset(stackIndex: 0, count: 3, peekPixels: peek) == 16)
-        #expect(LayoutGeometry.peekInset(stackIndex: 1, count: 3, peekPixels: peek) == 8)
-        #expect(LayoutGeometry.peekInset(stackIndex: 2, count: 3, peekPixels: peek) == 0)
-    }
-
-    /// Front member (index 0) sits lowest at `(count-1) * peek`; back member gets 0;
-    /// the inset decreases by exactly `peek` per step down the stack.
-    @Test func peekInsetIsAMonotonicStaircase() {
-        let count = 5
-        let peek: CGFloat = 12
-        #expect(LayoutGeometry.peekInset(stackIndex: 0, count: count, peekPixels: peek) == CGFloat(count - 1) * peek)
-        #expect(LayoutGeometry.peekInset(stackIndex: count - 1, count: count, peekPixels: peek) == 0)
-        for index in 1..<count {
-            let prev = LayoutGeometry.peekInset(stackIndex: index - 1, count: count, peekPixels: peek)
-            let curr = LayoutGeometry.peekInset(stackIndex: index, count: count, peekPixels: peek)
-            #expect(isClose(prev - curr, peek), "step \(index)")
-        }
-    }
-
-    @Test func peekInsetZeroPeekPixels() {
-        for index in 0..<4 {
-            #expect(LayoutGeometry.peekInset(stackIndex: index, count: 4, peekPixels: 0) == 0, "index \(index)")
+    /// A lone window keeps its whole slot; every member of a real stack gives up the same band.
+    @Test func stackInsetIsTheBandOnlyForRealStacks() {
+        #expect(LayoutGeometry.stackInset(count: 0, bandHeight: 20) == 0)
+        #expect(LayoutGeometry.stackInset(count: 1, bandHeight: 20) == 0)
+        for count in 2...6 {
+            #expect(LayoutGeometry.stackInset(count: count, bandHeight: 20) == 20, "count \(count)")
         }
     }
 

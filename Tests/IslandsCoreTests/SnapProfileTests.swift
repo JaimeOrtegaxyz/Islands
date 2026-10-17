@@ -37,23 +37,16 @@ import Testing
         #expect(SnapProfile.allCases == allCases)
     }
 
-    @Test func peekSizePointsPinned() {
-        #expect(PeekSizePreset.small.points == 4)
-        #expect(PeekSizePreset.medium.points == 8)
-        #expect(PeekSizePreset.large.points == 12)
+    @Test func stackMarkerRawValuesPinned() {
+        #expect(StackMarkerStyle.tabs.rawValue == 0)
+        #expect(StackMarkerStyle.slim.rawValue == 1)
+        let allCases: [StackMarkerStyle] = [.tabs, .slim]
+        #expect(StackMarkerStyle.allCases == allCases)
     }
 
-    @Test func peekSizeRawValuesPinned() {
-        #expect(PeekSizePreset.small.rawValue == 0)
-        #expect(PeekSizePreset.medium.rawValue == 1)
-        #expect(PeekSizePreset.large.rawValue == 2)
-        let allCases: [PeekSizePreset] = [.small, .medium, .large]
-        #expect(PeekSizePreset.allCases == allCases)
-    }
-
-    @Test func peekSizePointsAreIncreasingAndPositive() {
-        let points = PeekSizePreset.allCases.map { $0.points }
-        #expect(points == points.sorted())
-        #expect(points.allSatisfy { $0 > 0 })
+    /// The band every stacked window gives up: 20pt for tabs, a 4pt dash plus 3pt either side for slim.
+    @Test func stackMarkerBandsPinned() {
+        #expect(StackMarkerStyle.tabs.bandHeight == 20)
+        #expect(StackMarkerStyle.slim.bandHeight == 10)
     }
 }

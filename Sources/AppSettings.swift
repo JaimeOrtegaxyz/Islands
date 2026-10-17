@@ -120,7 +120,7 @@ struct AppSettingsSnapshot {
     var reverseCycleExtraModifiers: ModifierSet
     var centeredModeExtraModifiers: ModifierSet
     var snapProfile: SnapProfile
-    var peekSize: PeekSizePreset
+    var stackMarker: StackMarkerStyle
 
     var reverseCycleModifiers: ModifierSet {
         baseModifiers.union(reverseCycleExtraModifiers)
@@ -137,7 +137,7 @@ final class SettingsStore {
         static let reverseCycleExtraModifiers = "reverseCycleExtraModifiers"
         static let centeredModeExtraModifiers = "centeredModeExtraModifiers"
         static let snapProfile = "snapProfile"
-        static let peekSize = "peekSize"
+        static let stackMarker = "stackMarker"
     }
 
     private let defaults: UserDefaults
@@ -153,14 +153,14 @@ final class SettingsStore {
         let reverse = ModifierSet(rawValue: defaults.integer(forKey: Keys.reverseCycleExtraModifiers))
         let centered = ModifierSet(rawValue: defaults.integer(forKey: Keys.centeredModeExtraModifiers))
         let snap = SnapProfile(rawValue: defaults.integer(forKey: Keys.snapProfile)) ?? .both
-        let peek = PeekSizePreset(rawValue: defaults.integer(forKey: Keys.peekSize)) ?? .medium
+        let marker = StackMarkerStyle(rawValue: defaults.integer(forKey: Keys.stackMarker)) ?? .tabs
 
         return normalizedSnapshot(
             baseModifiers: base,
             reverseCycleExtraModifiers: reverse,
             centeredModeExtraModifiers: centered,
             snapProfile: snap,
-            peekSize: peek
+            stackMarker: marker
         )
     }
 
@@ -189,9 +189,9 @@ final class SettingsStore {
         persist(updated)
     }
 
-    func setPeekSize(_ preset: PeekSizePreset) {
+    func setStackMarker(_ style: StackMarkerStyle) {
         var updated = snapshot
-        updated.peekSize = preset
+        updated.stackMarker = style
         persist(updated)
     }
 
@@ -205,7 +205,7 @@ final class SettingsStore {
             Keys.reverseCycleExtraModifiers: Self.defaultSnapshot.reverseCycleExtraModifiers.rawValue,
             Keys.centeredModeExtraModifiers: Self.defaultSnapshot.centeredModeExtraModifiers.rawValue,
             Keys.snapProfile: Self.defaultSnapshot.snapProfile.rawValue,
-            Keys.peekSize: Self.defaultSnapshot.peekSize.rawValue,
+            Keys.stackMarker: Self.defaultSnapshot.stackMarker.rawValue,
         ])
     }
 
@@ -215,14 +215,14 @@ final class SettingsStore {
             reverseCycleExtraModifiers: snapshot.reverseCycleExtraModifiers,
             centeredModeExtraModifiers: snapshot.centeredModeExtraModifiers,
             snapProfile: snapshot.snapProfile,
-            peekSize: snapshot.peekSize
+            stackMarker: snapshot.stackMarker
         )
 
         defaults.set(normalized.baseModifiers.rawValue, forKey: Keys.baseModifiers)
         defaults.set(normalized.reverseCycleExtraModifiers.rawValue, forKey: Keys.reverseCycleExtraModifiers)
         defaults.set(normalized.centeredModeExtraModifiers.rawValue, forKey: Keys.centeredModeExtraModifiers)
         defaults.set(normalized.snapProfile.rawValue, forKey: Keys.snapProfile)
-        defaults.set(normalized.peekSize.rawValue, forKey: Keys.peekSize)
+        defaults.set(normalized.stackMarker.rawValue, forKey: Keys.stackMarker)
 
         NotificationCenter.default.post(name: .settingsDidChange, object: self)
     }
@@ -232,7 +232,7 @@ final class SettingsStore {
         reverseCycleExtraModifiers: ModifierSet,
         centeredModeExtraModifiers: ModifierSet,
         snapProfile: SnapProfile,
-        peekSize: PeekSizePreset
+        stackMarker: StackMarkerStyle
     ) -> AppSettingsSnapshot {
         let normalizedBase = baseModifiers.isValidBaseShortcut ? baseModifiers : Self.defaultSnapshot.baseModifiers
         let extraOptions = ModifierSet.extraModifierOptions(excluding: normalizedBase)
@@ -250,7 +250,7 @@ final class SettingsStore {
             reverseCycleExtraModifiers: normalizedReverse,
             centeredModeExtraModifiers: normalizedCentered,
             snapProfile: snapProfile,
-            peekSize: peekSize
+            stackMarker: stackMarker
         )
     }
 
@@ -259,7 +259,7 @@ final class SettingsStore {
         reverseCycleExtraModifiers: [.shift],
         centeredModeExtraModifiers: [.command],
         snapProfile: .sixths,
-        peekSize: .medium
+        stackMarker: .tabs
     )
 
     private static func defaultReverseExtra(for base: ModifierSet) -> ModifierSet {

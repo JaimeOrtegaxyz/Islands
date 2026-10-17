@@ -12,7 +12,7 @@ final class SettingsWindowController: NSWindowController {
     private let reverseCyclePills = PillSelectorView()
     private let centeredModePills = PillSelectorView()
     private let snapSizeSelector = SnapSizeSelector()
-    private let peekSizePills = PillSelectorView()
+    private let stackMarkerPills = PillSelectorView()
     private let launchAtLoginCheckbox = StyledCheckbox(title: "Launch at login")
     private let accessibilityStatusLabel = WhiteLabel()
     private let accessibilityButton = OutlineButton(title: "Open")
@@ -142,9 +142,9 @@ final class SettingsWindowController: NSWindowController {
         snapSizeSelector.onChange = { [weak self] profile in
             self?.settingsStore.setSnapProfile(profile)
         }
-        peekSizePills.onSelect = { [weak self] raw in
-            if let preset = PeekSizePreset(rawValue: raw) {
-                self?.settingsStore.setPeekSize(preset)
+        stackMarkerPills.onSelect = { [weak self] raw in
+            if let style = StackMarkerStyle(rawValue: raw) {
+                self?.settingsStore.setStackMarker(style)
             }
         }
         launchAtLoginCheckbox.onToggle = { [weak self] shouldEnable in
@@ -163,7 +163,7 @@ final class SettingsWindowController: NSWindowController {
         previewLabel.alphaValue = 0.75
         previewLabel.maximumNumberOfLines = 3
 
-        let peekGroup = fieldGroup(label: "Peek size", control: peekSizePills)
+        let markerGroup = fieldGroup(label: "Stack marker", control: stackMarkerPills)
 
         let column = NSStackView(views: [
             sectionHeader("Shortcuts"),
@@ -171,7 +171,7 @@ final class SettingsWindowController: NSWindowController {
             fieldGroup(label: "Centered mode adds", control: centeredModePills),
             fieldGroup(label: "Reverse stack adds", control: reverseCyclePills),
             previewLabel,
-            peekGroup,
+            markerGroup,
         ])
         column.orientation = .vertical
         column.alignment = .leading
@@ -304,9 +304,9 @@ final class SettingsWindowController: NSWindowController {
         centeredModePills.configure(items: extraItems, selectedRawValue: settings.centeredModeExtraModifiers.rawValue)
 
         snapSizeSelector.setProfile(settings.snapProfile)
-        peekSizePills.configure(
-            items: PeekSizePreset.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
-            selectedRawValue: settings.peekSize.rawValue
+        stackMarkerPills.configure(
+            items: StackMarkerStyle.allCases.map { PillSelectorView.Item(rawValue: $0.rawValue, title: $0.displayName) },
+            selectedRawValue: settings.stackMarker.rawValue
         )
 
         previewLabel.stringValue = """

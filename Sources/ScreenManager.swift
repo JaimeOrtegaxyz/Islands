@@ -134,6 +134,12 @@ final class ScreenManager {
         convertToTopLeftCoordinates(screen.visibleFrame)
     }
 
+    /// A top-left (AX) frame in AppKit's bottom-left window coordinates, for placing our own
+    /// windows next to the ones we manage. The flip is its own inverse.
+    func cocoaFrame(fromTopLeft frame: CGRect) -> CGRect {
+        convertToTopLeftCoordinates(frame)
+    }
+
     // MARK: - Private
 
     private func screen(for point: CGPoint) -> NSScreen? {

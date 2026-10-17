@@ -6,15 +6,15 @@ public enum LayoutGeometry {
 
     /// The screen-space frame for a window in a given snap `state`.
     ///
-    /// `peekInset` shifts the window down and trims its height by the same amount,
-    /// revealing the accordion peek strip at the top. It affects only the vertical
-    /// axis — x and width are independent of it.
+    /// `topInset` shifts the window down and trims its height by the same amount,
+    /// leaving the band at the top of the slot where a stack's marker is drawn. It
+    /// affects only the vertical axis — x and width are independent of it.
     public static func frame(
         for state: WindowState,
         horizontal: AxisLayout,
         vertical: AxisLayout,
         screenFrame: CGRect,
-        peekInset: CGFloat = 0
+        topInset: CGFloat = 0
     ) -> CGRect {
         let horizontalEntry = state.hCentered
             ? horizontal.centerPositions[state.hCenterIdx - 1]
@@ -26,18 +26,17 @@ public enum LayoutGeometry {
 
         return CGRect(
             x: screenFrame.origin.x + screenFrame.width * horizontalEntry.offset,
-            y: screenFrame.origin.y + screenFrame.height * verticalEntry.offset + peekInset,
+            y: screenFrame.origin.y + screenFrame.height * verticalEntry.offset + topInset,
             width: screenFrame.width * horizontalEntry.size,
-            height: screenFrame.height * verticalEntry.size - peekInset
+            height: screenFrame.height * verticalEntry.size - topInset
         )
     }
 
-    /// The peek inset for a window at `stackIndex` within an accordion of `count`
-    /// members. The front member (index 0) sits lowest — `(count - 1) * peekPixels`
-    /// — and the back member (index `count - 1`) gets none, so the stack fans out
-    /// as a downward staircase. Callers pass `stackIndex` in `0..<count`.
-    public static func peekInset(stackIndex: Int, count: Int, peekPixels: CGFloat) -> CGFloat {
-        CGFloat(count - 1 - stackIndex) * peekPixels
+    /// The top inset every member of a stack of `count` windows wears: the marker's band
+    /// when the zone really is a stack, none for a lone window. All members share one
+    /// frame, so only the front one is ever visible and switching never moves a window.
+    public static func stackInset(count: Int, bandHeight: CGFloat) -> CGFloat {
+        count > 1 ? bandHeight : 0
     }
 
     /// The slot on one axis whose geometry best matches an actual window, measured in

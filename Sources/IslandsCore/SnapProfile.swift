@@ -27,26 +27,3 @@ public enum SnapProfile: Int, CaseIterable {
         }
     }
 }
-
-public enum PeekSizePreset: Int, CaseIterable {
-    case small
-    case medium
-    case large
-
-    public var displayName: String {
-        switch self {
-        case .small: return "Small"
-        case .medium: return "Medium"
-        case .large: return "Large"
-        }
-    }
-
-    /// Height of the peek strip revealed for stacked (accordion) windows, in points.
-    public var points: CGFloat {
-        switch self {
-        case .small: return 4
-        case .medium: return 8
-        case .large: return 12
-        }
-    }
-}
