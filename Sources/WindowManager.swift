@@ -427,7 +427,10 @@ final class WindowManager {
                 continue
             }
             sawExisting = true
-            if engine.isMinimized(window) {
+            // A closed member's cached element still resolves until the cleanup sweep; evict it
+            // too, so it can't take a peek slot or be focused as the front. Evicting (not just
+            // skipping) keeps zoneWindows in step with the layout peekInsetForWindow assumes.
+            if engine.presence(of: window) != .visible {
                 evictFromZone(windowID: windowID, zoneKey: zoneKey)
                 continue
             }
@@ -449,6 +452,13 @@ final class WindowManager {
         for (visibleIndex, entry) in visible.enumerated() {
             let inset = LayoutGeometry.peekInset(stackIndex: visibleIndex, count: count, peekPixels: peekPixels)
             applyFrame(window: entry.window, state: winState[entry.id]!, targetScreen: nil, peekInset: inset)
+
+            // Record where the window actually landed — for every member, not just the one
+            // being acted on. A re-fan (Tab rotation, a neighbour leaving, a peek-size change)
+            // shifts a member's inset, and an app that clamps or quantizes lands off-slot at a
+            // new place; a frame left over from the previous layout would fail the next
+            // in-place check (see isInPlace) and evict a member the user never touched.
+            winState[entry.id]?.settledFrame = engine.getFrame(entry.window)
         }
 
         // Raise only when the front changed (a member joined, or Tab cycled) — the
@@ -512,13 +522,11 @@ final class WindowManager {
         if let oldZone, oldZone != newZone {
             applyPeekOffsets(zoneKey: oldZone, shouldFocusFront: false)
         }
+        // Also records each member's settled frame (including this window's): apps with
+        // hard minimums or quantized sizing land off-slot, and that frame is what lets the
+        // next press tell "the app refused our frame" from "the user moved the window"
+        // (see synchronizeZoneMembership and reconcileZoneMembers).
         applyPeekOffsets(zoneKey: newZone)
-
-        // Where the window actually landed: apps with hard minimums or quantized
-        // sizing settle off-slot, and this is what lets the next press tell "the app
-        // refused our frame" from "the user moved the window" (see resolveState and
-        // synchronizeZoneMembership).
-        winState[windowID]?.settledFrame = engine.getFrame(window)
     }
 
     // MARK: - Action Prologue
@@ -785,10 +793,21 @@ final class WindowManager {
     // MARK: - Cleanup
 
     private func cleanupStaleWindows() {
+        // Runs on every exit: the engine's AX element cache only needs to hold windows we
+        // track, so anything else (closed windows, windows only seen by a scan) goes here.
+        defer { engine.pruneWindowElements(keeping: Set(winState.keys)) }
+        guard !winState.isEmpty else { return }
+
+        // One window-list copy for the whole sweep, not one per tracked window. An empty
+        // list means the query failed (a live session always has the Dock/menu bar windows),
+        // not that everything closed — don't wipe all state on it.
+        let liveWindows = engine.liveWindowIDs()
+        guard !liveWindows.isEmpty else { return }
+
         var deadWindows: [CGWindowID] = []
         var zonesToRefresh: Set<String> = []
 
-        for (windowID, state) in winState where !engine.windowExists(windowID) {
+        for (windowID, state) in winState where !liveWindows.contains(windowID) {
             deadWindows.append(windowID)
             if let zoneKey = state.currentZone {
                 zonesToRefresh.insert(zoneKey)
@@ -808,7 +827,6 @@ final class WindowManager {
         for windowID in deadWindows {
             removeFromZone(windowID: windowID, zoneKey: winState[windowID]?.currentZone)
             winState[windowID] = nil
-            engine.forgetWindowElement(for: windowID)
         }
 
         for zoneKey in zonesToRefresh where zoneWindows[zoneKey] != nil {

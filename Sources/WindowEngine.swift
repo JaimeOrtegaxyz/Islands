@@ -20,8 +20,9 @@ final class WindowEngine {
 
     /// Window AX elements keyed by CGWindowID, so zone maintenance can reach a known
     /// window without rescanning every running app's window list on each keypress.
-    /// An entry for a closed window fails its (best-effort) AX calls harmlessly for
-    /// the few seconds until the manager's cleanup calls `forgetWindowElement`.
+    /// An entry for a closed window fails its (best-effort) AX calls — and reads as `.gone`
+    /// from `presence(of:)` — for the few seconds until the manager's cleanup calls `pruneWindowElements`, which
+    /// also bounds the cache: `getWindowID` fills it for every window it sees, tracked or not.
     private var windowElementCache: [CGWindowID: AXUIElement] = [:]
 
     /// Get the currently focused window's AXUIElement
@@ -84,16 +85,27 @@ final class WindowEngine {
     /// Fail-open: absent / non-boolean / error all read as `false`, so on any doubt
     /// we treat the window as visible and act on it normally.
     func isMinimized(_ window: AXUIElement) -> Bool {
+        presence(of: window) == .minimized
+    }
+
+    enum WindowPresence { case visible, minimized, gone }
+
+    /// `isMinimized`'s single kAXMinimized read, also telling apart an element whose window
+    /// no longer exists (kAXErrorInvalidUIElement) — e.g. a cached element for a window closed
+    /// since the manager's last cleanup sweep. Same fail-open rule: any other error is `.visible`.
+    func presence(of window: AXUIElement) -> WindowPresence {
         var value: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value)
-        guard result == .success, let value, CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
-        return CFBooleanGetValue((value as! CFBoolean))
+        if result == .invalidUIElement { return .gone }
+        guard result == .success, let value, CFGetTypeID(value) == CFBooleanGetTypeID() else { return .visible }
+        return CFBooleanGetValue((value as! CFBoolean)) ? .minimized : .visible
     }
 
     /// Set a window's frame.
     ///
     /// Most apps apply AX position/size directly, so they take a simple synchronous fast path —
-    /// the only added cost over a bare set is one attribute read to detect that they're well-behaved.
+    /// the added cost over a bare set is one attribute read to detect that they're well-behaved,
+    /// plus `repinIfOversized`'s size read for targets that aren't flush against the top-left.
     /// Apps that advertise `AXEnhancedUserInterface` (Spotify, Electron/Chromium) instead apply
     /// geometry asynchronously and animated, which desyncs this open-loop manager (stale read-backs,
     /// moves that "fight back"); only those pay for the workaround dance. Keeping that cost off the
@@ -245,19 +257,16 @@ final class WindowEngine {
         return nil
     }
 
-    /// Drop the cached element for a window known to be gone (see `windowElementCache`).
-    func forgetWindowElement(for windowID: CGWindowID) {
-        windowElementCache[windowID] = nil
+    /// Drop every cached window element except those for `windowIDs` (see `windowElementCache`).
+    func pruneWindowElements(keeping windowIDs: Set<CGWindowID>) {
+        windowElementCache = windowElementCache.filter { windowIDs.contains($0.key) }
     }
 
-    /// Check if a CGWindowID still exists on screen
-    func windowExists(_ windowID: CGWindowID) -> Bool {
+    /// The IDs of every window the window server currently lists (on-screen or not), from a
+    /// single list copy. Callers checking many windows must use this rather than looking each
+    /// one up: every copy walks the whole window list.
+    func liveWindowIDs() -> Set<CGWindowID> {
         let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
-        for entry in list {
-            if let wid = entry[kCGWindowNumber] as? CGWindowID, wid == windowID {
-                return true
-            }
-        }
-        return false
+        return Set(list.compactMap { $0[kCGWindowNumber] as? CGWindowID })
     }
 }
