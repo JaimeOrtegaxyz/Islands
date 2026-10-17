@@ -15,7 +15,7 @@ A few other cool things:
 - key combo + `Enter` maximizes the window
 - key combo + `Cmd` + arrows keeps the window centered when resizing
 - got another monitor that way? the window overflows onto it
-- drop two windows in the same spot and they accordion-stack. Key combo + `Tab` rotates the stack
+- drop two windows in the same spot and they become an island: tabs on top show what's in it, and key combo + `Tab` switches between them
 
 **Download:** [latest release](https://github.com/JaimeOrtegaxyz/Islands/releases/latest) · macOS 14+ · Apple Silicon only (not tested on Intel, no plans to chase it)
 
@@ -26,8 +26,8 @@ A few other cool things:
 | `Ctrl+Opt + ←/→/↑/↓` | Cycle the focused window's size on that axis |
 | `Ctrl+Opt + Return` | Maximize |
 | `Ctrl+Opt + Cmd + ←/→/↑/↓` | Centered grow / shrink |
-| `Ctrl+Opt + Tab` | Rotate the accordion stack |
-| `Ctrl+Opt + Shift + Tab` | Rotate it the other way |
+| `Ctrl+Opt + Tab` | Next window in the island |
+| `Ctrl+Opt + Shift + Tab` | Previous window in the island |
 
 ## Snap sizes
 
@@ -42,9 +42,9 @@ Each arrow press steps through a set of fractions. Default is **sixths** (⅙ �
 Menu bar icon → *Settings…*:
 
 - re-record the base modifier combo (click the chip, press keys, release)
-- pick the extra modifiers for centered mode and reverse stack
+- pick the extra modifiers for centered mode and reverse island
 - choose snap profile
-- adjust accordion peek size (small / medium / large)
+- pick the island marker: tabs (icon + title per window) or slim (a short row of dashes)
 - toggle launch at login
 - restore defaults
 

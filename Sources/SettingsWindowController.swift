@@ -163,13 +163,13 @@ final class SettingsWindowController: NSWindowController {
         previewLabel.alphaValue = 0.75
         previewLabel.maximumNumberOfLines = 3
 
-        let markerGroup = fieldGroup(label: "Stack marker", control: stackMarkerPills)
+        let markerGroup = fieldGroup(label: "Island marker", control: stackMarkerPills)
 
         let column = NSStackView(views: [
             sectionHeader("Shortcuts"),
             fieldGroup(label: "Base combo", control: baseRecorder),
             fieldGroup(label: "Centered mode adds", control: centeredModePills),
-            fieldGroup(label: "Reverse stack adds", control: reverseCyclePills),
+            fieldGroup(label: "Reverse island adds", control: reverseCyclePills),
             previewLabel,
             markerGroup,
         ])
@@ -312,7 +312,7 @@ final class SettingsWindowController: NSWindowController {
         previewLabel.stringValue = """
         Move/resize · \(settings.baseModifiers.symbolString) + arrows / Return / Tab
         Centered · \(settings.centeredModeModifiers.symbolString) + arrows
-        Reverse stack · \(settings.reverseCycleModifiers.symbolString) + Tab
+        Reverse island · \(settings.reverseCycleModifiers.symbolString) + Tab
         """
         refreshSystemState()
     }
