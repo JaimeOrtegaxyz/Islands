@@ -47,6 +47,7 @@ final class WindowManager {
     private var verticalLayout: AxisLayout
     private var markerStyle: StackMarkerStyle
     private let markers: StackMarkerController
+    private let observer = WindowObserver()
 
     // Per-window state
     private var winState: [CGWindowID: WindowState] = [:]
@@ -62,6 +63,9 @@ final class WindowManager {
     /// server reorders ~100–150ms after an activation, and until then `refreshStackFronts`
     /// would read the old front back off it and undo the switch on the marker.
     private var frontSettlesAt: [String: Date] = [:]
+
+    /// Stacks with a member-moved check already scheduled (see `handle(_:)`).
+    private var pendingReconciles: Set<String> = []
 
     // Cleanup timer
     private var cleanupTimer: Timer?
@@ -86,13 +90,17 @@ final class WindowManager {
         markers.onReorder = { [weak self] zoneKey, order in
             self?.reorderStack(zoneKey, to: order)
         }
+        observer.onEvent = { [weak self] event in
+            // Out of the AX callback first: handling it re-enters AX.
+            DispatchQueue.main.async { self?.handle(event) }
+        }
 
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             self?.cleanupStaleWindows()
         }
 
-        // Faster than the cleanup sweep: a closed member must leave its marker promptly, and
-        // some apps (Finder) keep a closed window in the window list, so the sweep never sees it go.
+        // Backstop for what the AX notifications miss (an app that doesn't post them): faster than
+        // the cleanup sweep, which never sees a closed Finder window go — Finder keeps it listed.
         markerTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.refreshStackMarkers()
         }
@@ -253,6 +261,7 @@ final class WindowManager {
             markerStyle = newStyle
             markers.style = newStyle
             markers.removeAll()
+            observer.watch([:])
             winState.removeAll()
             zoneWindows.removeAll()
             zoneFront.removeAll()
@@ -520,6 +529,7 @@ final class WindowManager {
             focusFront(front.window, zoneKey: zoneKey)
         }
         updateMarker(zoneKey: zoneKey)
+        watchStackMembers()
     }
 
     /// The member highest in the window server's z-order — the one on screen.
@@ -578,6 +588,45 @@ final class WindowManager {
         markers.show(zoneKey: zoneKey, slot: screens.cocoaFrame(fromTopLeft: slot), members: members, frontID: frontID)
     }
 
+    /// Point the AX observer at exactly the windows in stacks.
+    private func watchStackMembers() {
+        var targets: [CGWindowID: (element: AXUIElement, pid: pid_t)] = [:]
+        for ids in zoneWindows.values where ids.count > 1 {
+            for id in ids {
+                guard let element = engine.windowElement(for: id), let pid = engine.getOwnerPID(element) else { continue }
+                targets[id] = (element, pid)
+            }
+        }
+        observer.watch(targets)
+    }
+
+    /// A change to a stack member made outside Islands.
+    private func handle(_ event: WindowObserver.Event) {
+        switch event {
+        case .closed(let windowID), .minimized(let windowID):
+            // Re-laying out evicts members that are gone or minimized.
+            guard let zoneKey = winState[windowID]?.currentZone, zoneWindows[zoneKey] != nil else { return }
+            layoutStack(zoneKey: zoneKey, shouldFocusFront: false)
+        case .moved(let windowID):
+            // Islands' own layouts post these too, and a drag posts a stream of them, so check
+            // once shortly after the first; members still in place are left alone.
+            guard let zoneKey = winState[windowID]?.currentZone,
+                  pendingReconciles.insert(zoneKey).inserted else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.pendingReconciles.remove(zoneKey)
+                if self.reconcileZoneMembers(zoneKey: zoneKey) {
+                    self.layoutStack(zoneKey: zoneKey, shouldFocusFront: false)
+                }
+            }
+        case .focusChanged:
+            // A same-app switch (⌘-`) reorders right away; read the result a beat later.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.refreshStackFronts()
+            }
+        }
+    }
+
     /// A click on a marker: bring that member forward. Members the user has moved away by
     /// hand are dropped first, so the click can't summon a window from elsewhere.
     private func selectStackMember(_ windowID: CGWindowID, in zoneKey: String) {
@@ -617,11 +666,14 @@ final class WindowManager {
     }
 
     /// Periodic refresh, only while a stack exists: members closed or minimized behind Islands'
-    /// back (re-laid out, which evicts them), fronts changed outside Islands, and titles that
-    /// changed (a terminal's working directory, a document name).
+    /// back that no notification reported (re-laid out, which evicts them), fronts changed outside
+    /// Islands, and titles that changed (a terminal's working directory, a document name).
     private func refreshStackMarkers() {
         let stacks = zoneWindows.filter { $0.value.count > 1 }
-        guard !stacks.isEmpty else { return }
+        guard !stacks.isEmpty else {
+            observer.watch([:])
+            return
+        }
         refreshStackFronts()
         for (zoneKey, ids) in stacks {
             let lost = ids.contains { id in
@@ -633,6 +685,7 @@ final class WindowManager {
                 updateMarker(zoneKey: zoneKey)
             }
         }
+        watchStackMembers()
     }
 
     private func finishMove(window: AXUIElement, windowID: CGWindowID, oldZone: String?, targetScreen: NSScreen?) {
